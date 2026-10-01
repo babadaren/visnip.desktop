@@ -1,0 +1,57 @@
+# Build outputs
+build*/
+dist/
+out/
+*.user
+*.autosave
+*.obj
+*.o
+*.exe
+*.dll
+*.pdb
+*.ilk
+*.a
+*.lib
+*.exp
+
+# Runtime/generated data
+logs/
+*.log
+screenshots/
+*.tmp
+__pycache__/
+*.pyc
+.venv-ui-region/
+tools/ui_region_model/data/
+tools/ui_region_model/runs/
+tools/ui_region_model/.playwright/
+# Third-party screenshots and annotations stay local: they are not licensed for
+# redistribution. The history rewrite of 2026-09-28 removed the committed copies.
+tools/ui_region_model/.labeling/
+
+# Local secrets/configs
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary probes
+.tmp_probe/
+tmp/
+
+# Local tool caches
+.pytest_cache/
+.ruff_cache/
+
+# Large OCR binaries (fetch with scripts/fetch_ocr_assets.ps1); *.dll is
+# already ignored globally above.
+third_party/ocr/*.onnx
+third_party/ocr/rec/*/model.onnx

@@ -1,0 +1,22 @@
+/* Visnip v0.3 Compact - Light theme */
+VisnipToolbar {
+    min-height: 30px;
+    max-height: 30px;
+    padding: 4px 8px;
+    border-radius: 9px;
+    background: rgba(255,255,255,0.94);
+    border: 1px solid #DCE5F2;
+}
+VisnipToolButton {
+    min-width: 22px;
+    min-height: 22px;
+    max-width: 22px;
+    max-height: 22px;
+    border-radius: 6px;
+    padding: 0;
+    color: #172033;
+    qproperty-iconSize: 15px 15px;
+}
+VisnipToolButton:hover { background: #F5F8FD; }
+VisnipToolButton:checked { background: #EAF1FF; color: #4F7CFF; }
+VisnipToolbarSeparator { min-width: 1px; max-width: 1px; min-height: 14px; background: #DCE5F2; }

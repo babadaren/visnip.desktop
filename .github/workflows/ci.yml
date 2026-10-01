@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build and tests (online translation ${{ matrix.online }})
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # OFF is the published offline-only build; ON keeps the optional
+        # online modes compiling and tested.
+        online: ['OFF', 'ON']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/windows-build
+        with:
+          online-translation: ${{ matrix.online }}
+
+      - name: Tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --timeout 900 -V
+
+      - name: Diagnose failed test suites
+        if: failure()
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_QPA_FONTDIR: C:/Windows/Fonts
+        run: |
+          # QtTest output does not reach the runner's pipes; write it to files.
+          $failed = Get-Content build/Testing/Temporary/LastTestsFailed.log -ErrorAction SilentlyContinue
+          foreach ($entry in $failed) {
+            $exe = Join-Path build (($entry -split ':', 2)[1] + '.exe')
+            if (-not (Test-Path $exe)) { continue }
+            $log = Join-Path $env:RUNNER_TEMP 'qtest-full.txt'
+            & $exe -o "$log,txt" | Out-Null
+            Write-Host ("##### {0}: full run exit 0x{1:X8}" -f $exe, $LASTEXITCODE)
+            if (Test-Path $log) { Get-Content $log | Where-Object { $_ -notmatch '^PASS ' } | ForEach-Object { Write-Host $_ } }
+            $functions = & $exe -functions | ForEach-Object { $_.Trim() -replace '\(\)$', '' } | Where-Object { $_ }
+            foreach ($function in $functions) {
+              $one = Join-Path $env:RUNNER_TEMP 'qtest-one.txt'
+              & $exe $function -o "$one,txt" | Out-Null
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host ("=== {0} alone: exit 0x{1:X8}" -f $function, $LASTEXITCODE)
+                if (Test-Path $one) { Get-Content $one | ForEach-Object { Write-Host $_ } }
+              }
+            }
+          }
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath build\visnip.exe -ArgumentList '--self-test' -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw "visnip.exe --self-test failed with $($process.ExitCode)" }
+
+      - name: Package with the release script (includes --self-test of the package)
+        if: matrix.online == 'OFF'
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -BuildDir build -OutDir dist -Version ci

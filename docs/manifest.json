@@ -1,0 +1,21 @@
+{
+  "package": "Visnip_design_package_v0.3_compact",
+  "created": "2026-06-26",
+  "summary": "Visnip 轻量截图贴图工具 v0.3 Compact 设计包。核心变更：默认工具栏高度从 34px 收敛为 30px，按钮 22px，图标 15px，风格更小巧清新。",
+  "contains": [
+    "docs",
+    "assets/app",
+    "assets/icons",
+    "assets/buttons",
+    "assets/mockups",
+    "dev/design_tokens.json",
+    "dev/qss",
+    "dev/qrc"
+  ],
+  "keyFiles": {
+    "designMarkdown": "docs/Visnip_轻量截图贴图工具_设计说明书_v0.3_compact.md",
+    "designBoard": "assets/mockups/Visnip_UI_Design_Board_v0.3_compact.png",
+    "toolbarSpec": "dev/toolbar_spec.json",
+    "tokens": "dev/design_tokens.json"
+  }
+}

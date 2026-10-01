@@ -1,0 +1,67 @@
+name: Build Visnip (Windows, MinGW)
+description: Installs Qt 6.4.2 with its MinGW 11.2 toolchain, fetches the OCR runtime and models, then configures and builds a Release tree.
+
+inputs:
+  build-dir:
+    description: CMake binary directory
+    default: build
+  online-translation:
+    description: VISNIP_ONLINE_TRANSLATION (OFF is the published offline-only build)
+    default: 'OFF'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Qt 6.4.2 and MinGW 11.2
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.4.2'
+        host: windows
+        target: desktop
+        arch: win64_mingw
+        tools: tools_mingw90
+        cache: true
+
+    - name: Put the Qt MinGW toolchain first on PATH
+      shell: pwsh
+      run: |
+        # The runner image has other GCC builds; Qt 6.4.2 was built with MinGW 11.2.
+        $roots = @($env:IQTA_TOOLS, (Join-Path $env:QT_ROOT_DIR '..\..\Tools'), (Join-Path $env:RUNNER_WORKSPACE 'Qt\Tools')) |
+          Where-Object { $_ -and (Test-Path $_) }
+        $mingw = $roots | ForEach-Object { Get-ChildItem -Directory -Path $_ -Filter 'mingw*_64' } | Select-Object -First 1
+        if (-not $mingw) { throw "Qt MinGW toolchain not found under: $($roots -join ', ')" }
+        $bin = Join-Path $mingw.FullName 'bin'
+        & (Join-Path $bin 'g++.exe') --version
+        $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        "VISNIP_MINGW_BIN=$bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Install Ninja
+      shell: pwsh
+      run: python -m pip install --disable-pip-version-check ninja
+
+    - name: Cache OCR runtime and models
+      uses: actions/cache@v4
+      with:
+        path: |
+          third_party/onnxruntime/bin
+          third_party/ocr
+        key: ocr-assets-${{ hashFiles('scripts/fetch_ocr_assets.ps1') }}
+
+    - name: Fetch OCR runtime and models (hash-verified)
+      shell: pwsh
+      run: ./scripts/fetch_ocr_assets.ps1
+
+    - name: Configure
+      shell: pwsh
+      run: >
+        cmake -S . -B ${{ inputs.build-dir }} -G Ninja
+        -DCMAKE_BUILD_TYPE=Release
+        "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+        "-DCMAKE_C_COMPILER=$env:VISNIP_MINGW_BIN/gcc.exe"
+        "-DCMAKE_CXX_COMPILER=$env:VISNIP_MINGW_BIN/g++.exe"
+        -DBUILD_TESTING=ON
+        -DVISNIP_ONLINE_TRANSLATION=${{ inputs.online-translation }}
+
+    - name: Build
+      shell: pwsh
+      run: cmake --build ${{ inputs.build-dir }} --parallel

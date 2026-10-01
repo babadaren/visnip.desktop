@@ -1,0 +1,80 @@
+{
+  "product": {
+    "name": "Visnip",
+    "version": "v0.3 Compact",
+    "date": "2026-06-26"
+  },
+  "brand": {
+    "primary": "#4F7CFF",
+    "primaryHover": "#416BDF",
+    "primaryPressed": "#3558C4",
+    "primarySoft": "#EAF1FF",
+    "accent": "#45D6B4",
+    "accentSoft": "#E9FBF6",
+    "logoInk": "#0B0B0D",
+    "freshBlue": "#7DB8FF"
+  },
+  "light": {
+    "surface": "#FFFFFF",
+    "surfaceTranslucent": "rgba(255,255,255,0.94)",
+    "surface2": "#F8FAFD",
+    "surface3": "#EEF4FB",
+    "text": "#172033",
+    "textSecondary": "#667085",
+    "textMuted": "#98A2B3",
+    "border": "#DCE5F2",
+    "shadow": "rgba(19,32,56,0.12)",
+    "overlay": "rgba(0,0,0,0.42)"
+  },
+  "dark": {
+    "surface": "#1F2430",
+    "surface2": "#293140",
+    "surface3": "#333C4D",
+    "text": "#F7F9FC",
+    "textSecondary": "#B8C0D4",
+    "textMuted": "#7F8AA3",
+    "border": "#3B4659",
+    "shadow": "rgba(0,0,0,0.32)",
+    "overlay": "rgba(0,0,0,0.50)"
+  },
+  "semantic": {
+    "success": "#22A06B",
+    "warning": "#F2A516",
+    "danger": "#E55656"
+  },
+  "toolbar": {
+    "defaultMode": "compact",
+    "height": 30,
+    "button": 22,
+    "icon": 15,
+    "paddingX": 8,
+    "paddingY": 4,
+    "gap": 5,
+    "separatorWidth": 1,
+    "separatorHeight": 14,
+    "separatorBlock": 12,
+    "radius": 9,
+    "buttonRadius": 6,
+    "shadowBlur": 14,
+    "shadowOffsetY": 6,
+    "safeHitArea": 26
+  },
+  "selection": {
+    "border": "#4F7CFF",
+    "handleFill": "#FFFFFF",
+    "handleStroke": "#4F7CFF",
+    "handleSize": 7,
+    "labelBg": "rgba(23,32,51,0.82)",
+    "mask": "rgba(0,0,0,0.40)"
+  },
+  "font": {
+    "family": "Microsoft YaHei UI / Segoe UI / Noto Sans CJK SC",
+    "uiSize": 12,
+    "titleSize": 18
+  },
+  "icon": {
+    "strokeWidth": 1.75,
+    "strokeLinecap": "round",
+    "strokeLinejoin": "round"
+  }
+}

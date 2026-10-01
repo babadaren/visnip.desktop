@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Visnip compact app icon</title>
+  <desc id="desc">Compact white app icon optimized for small sizes.</desc>
+  <rect width="256" height="256" rx="55" fill="#FFFFFF"/>
+  <g transform="translate(14.93 11.36) scale(2.2865)">
+    <path d="M 93 14 L 7 14 L 50 88 L 60 76 L 37 38 L 57 38 L 70 59 L 93 14 Z" fill="#0B0B0D"/>
+  </g>
+</svg>

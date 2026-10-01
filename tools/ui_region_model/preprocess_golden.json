@@ -1,0 +1,24 @@
+{
+  "contractVersion": 2,
+  "image": {
+    "width": 37,
+    "height": 23,
+    "pixelFormula": {
+      "r": "(17*x + 3*y) mod 256",
+      "g": "(5*x + 29*y) mod 256",
+      "b": "(11*x + 7*y) mod 256"
+    }
+  },
+  "proposalBox": {
+    "x": 3,
+    "y": 2,
+    "width": 11,
+    "height": 7
+  },
+  "tensor": {
+    "dtype": "little-endian-float32",
+    "order": "C",
+    "shape": [7, 96, 256],
+    "sha256": "f0d9d5572d584e03351478dd296995398f4ff2082f9ed1a72f1efedc61d34ac6"
+  }
+}

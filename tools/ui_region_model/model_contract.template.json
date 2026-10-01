@@ -1,0 +1,73 @@
+{
+  "contractVersion": 2,
+  "modelFamily": "visnip-ui-region",
+  "runtime": {
+    "engine": "onnxruntime",
+    "testedVersion": "1.22.0",
+    "opset": 17
+  },
+  "training": {
+    "initialization": "random",
+    "pretrainedWeights": false,
+    "datasetSchemaVersion": 2,
+    "sampleUnit": "one immutable OCR proposal linked to one verified annotation"
+  },
+  "input": {
+    "name": "regions",
+    "dtype": "float32",
+    "shape": ["N", 7, 96, 256],
+    "channels": [
+      "local_rgb_r",
+      "local_rgb_g",
+      "local_rgb_b",
+      "context_rgb_r",
+      "context_rgb_g",
+      "context_rgb_b",
+      "context_candidate_mask"
+    ],
+    "rgbNormalization": "pixel / 127.5 - 1.0",
+    "maskNormalization": "pixel / 255.0",
+    "letterboxFillRgb": 127,
+    "coordinateConvention": "integer xywh half-open",
+    "localCrop": {
+      "padding": "max(2, floor((candidateHeight + 2) / 4)) pixels on every edge"
+    },
+    "contextCrop": {
+      "width": "max(2 * candidateWidth, 12 * candidateHeight)",
+      "height": "5 * candidateHeight",
+      "left": "candidateX - floor((contextWidth - candidateWidth) / 2)",
+      "top": "candidateY - floor((contextHeight - candidateHeight) / 2)",
+      "outsideImageFillRgb": 127
+    },
+    "letterbox": {
+      "resize": "aspect preserving; rational round-half-up to 256x96",
+      "offset": "floor((targetSize - resizedSize) / 2), extra pixel on right or bottom",
+      "rgbResampling": "PIL bilinear compatible",
+      "maskResampling": "nearest"
+    },
+    "goldenTensor": {
+      "path": "preprocess_golden.json",
+      "sha256": null
+    }
+  },
+  "output": {
+    "name": "predictions",
+    "dtype": "float32",
+    "shape": ["N", 24],
+    "slices": {
+      "textness": {"offset": 0, "length": 3, "postprocess": "softmax", "labels": ["text_only", "mixed", "non_text"]},
+      "role": {"offset": 3, "length": 6, "postprocess": "softmax", "labels": ["heading", "paragraph", "ui_label", "caption_metadata", "data_code", "other"]},
+      "relation": {"offset": 9, "length": 4, "postprocess": "softmax", "labels": ["single", "split_required", "merge_required", "none"]},
+      "patchMode": {"offset": 13, "length": 3, "postprocess": "softmax", "labels": ["rect_safe", "mask_required", "none"]},
+      "eraseBox": {"offset": 16, "length": 4, "postprocess": "identity", "modelOutputRange": [0.0, 1.0], "encoding": "normalized-context-cxcywh"},
+      "layoutBox": {"offset": 20, "length": 4, "postprocess": "identity", "modelOutputRange": [0.0, 1.0], "encoding": "normalized-context-cxcywh"}
+    }
+  },
+  "runtimePolicy": {
+    "acceptOnlyWhen": ["textness=text_only", "relation=single", "patchMode=rect_safe", "all three probabilities meet their model-specific thresholds"],
+    "postVisualGate": "mandatory language translation policy; visual acceptance alone never authorizes an API call or patch",
+    "invalidOutput": "preserve_source",
+    "modelUnavailable": "preserve_source",
+    "deploymentAuthority": "disabled until a repository-owned runtime pixel harness is implemented"
+  }
+}

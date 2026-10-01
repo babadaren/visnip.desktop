@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Visnip app icon</title>
+  <desc id="desc">White rounded-square app icon with an enlarged classic black Visnip symbol.</desc>
+  <rect x="7" y="7" width="1010" height="1010" rx="218" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="14"/>
+  <g transform="translate(22.5 7.5) scale(9.89)">
+    <path d="M 93 14 L 7 14 L 50 88 L 60 76 L 37 38 L 57 38 L 70 59 L 93 14 Z" fill="#0B0B0D"/>
+  </g>
+</svg>

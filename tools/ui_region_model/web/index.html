@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visnip 区域标注</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="icon-button mobile-only" id="sampleToggle" type="button" title="样本列表" aria-label="样本列表">&#9776;</button>
+    <div class="brand-block">
+      <strong>Visnip</strong>
+      <span>区域标注</span>
+    </div>
+    <div class="dataset-name" id="datasetName">正在载入</div>
+    <nav class="sample-nav" aria-label="样本导航">
+      <button class="icon-button" id="previousSample" type="button" title="上一个样本" aria-label="上一个样本">&#8592;</button>
+      <span id="samplePosition">0 / 0</span>
+      <button class="icon-button" id="nextSample" type="button" title="下一个样本" aria-label="下一个样本">&#8594;</button>
+    </nav>
+    <button class="command-button primary" id="saveButton" type="button">保存</button>
+  </header>
+
+  <div class="app-shell" id="appShell">
+    <aside class="sample-pane" id="samplePane" aria-label="样本列表">
+      <div class="pane-heading">
+        <strong>样本</strong>
+        <span id="datasetProgress">0 / 0</span>
+      </div>
+      <div class="sample-filters" role="group" aria-label="样本筛选">
+        <button type="button" class="filter-button active" data-filter="all">全部</button>
+        <button type="button" class="filter-button" data-filter="unreviewed">待复核</button>
+        <button type="button" class="filter-button" data-filter="verified">已完成</button>
+      </div>
+      <div class="sample-list" id="sampleList"></div>
+    </aside>
+
+    <main class="workspace">
+      <div class="canvas-toolbar">
+        <div class="segmented" id="boxMode" role="group" aria-label="编辑范围">
+          <button type="button" class="active" data-box="textBox">文字框</button>
+          <button type="button" data-box="maskBox">清除框</button>
+          <button type="button" data-box="layoutBox">排版框</button>
+          <button type="button" data-box="containerBox">容器框</button>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button class="command-button" id="drawRegion" type="button" title="新增区域">+ 区域</button>
+        <button class="icon-button" id="zoomOut" type="button" title="缩小" aria-label="缩小">&#8722;</button>
+        <button class="zoom-value" id="fitCanvas" type="button" title="适合窗口">100%</button>
+        <button class="icon-button" id="zoomIn" type="button" title="放大" aria-label="放大">+</button>
+        <button class="icon-button mobile-only" id="inspectorToggle" type="button" title="区域属性" aria-label="区域属性">&#8942;</button>
+      </div>
+      <div class="viewport" id="viewport">
+        <div class="canvas-state" id="canvasState">正在载入样本</div>
+        <div class="image-stage" id="imageStage" hidden>
+          <img id="sourceImage" alt="待标注截图" draggable="false">
+          <svg id="overlay" xmlns="http://www.w3.org/2000/svg" aria-label="区域标注画布"></svg>
+        </div>
+      </div>
+      <div class="statusbar">
+        <span id="sampleStatus">未载入</span>
+        <span id="cursorPosition">x 0, y 0</span>
+      </div>
+    </main>
+
+    <aside class="inspector-pane" id="inspectorPane" aria-label="区域属性">
+      <div class="pane-heading">
+        <strong>区域</strong>
+        <button class="text-button danger" id="deleteRegion" type="button" disabled>删除</button>
+      </div>
+      <div class="inspector-empty" id="inspectorEmpty">未选择区域</div>
+      <form id="regionForm" hidden>
+        <section class="form-section">
+          <label>文字属性</label>
+          <div class="segmented equal" id="textnessControl" role="group">
+            <button type="button" data-textness="text">文字</button>
+            <button type="button" data-textness="non_text">非文字</button>
+            <button type="button" data-textness="mixed">混合</button>
+          </div>
+        </section>
+
+        <section class="form-section grid-two">
+          <label>角色<select id="roleSelect"></select></label>
+          <label>翻译策略<select id="policySelect"></select></label>
+          <label>候选关系<select id="relationSelect"></select></label>
+          <label>贴图模式<select id="patchModeSelect"></select></label>
+        </section>
+
+        <section class="form-section">
+          <label for="transcriptionInput">校正文本</label>
+          <textarea id="transcriptionInput" rows="2" spellcheck="false"></textarea>
+          <div class="ocr-readout" id="ocrReadout"></div>
+        </section>
+
+        <section class="form-section grid-two">
+          <label>上下文组<input id="groupInput" type="text" autocomplete="off"></label>
+          <label>阅读顺序<input id="readingOrderInput" type="number" step="1"></label>
+          <label>混合父区域<select id="parentAnnotationSelect"></select></label>
+          <label>所属容器<select id="containerSelect"></select></label>
+        </section>
+
+        <section class="form-section">
+          <div class="section-row">
+            <label>容器</label>
+            <div>
+              <button class="text-button" id="newContainer" type="button">新建</button>
+              <button class="text-button danger" id="deleteContainer" type="button">删除</button>
+            </div>
+          </div>
+          <label>容器角色<select id="containerRoleSelect"></select></label>
+        </section>
+
+        <section class="form-section grid-two checks">
+          <label><input id="illegibleInput" type="checkbox"> 无法辨认</label>
+          <label><input id="truncatedInput" type="checkbox"> 内容截断</label>
+        </section>
+
+        <section class="form-section action-row">
+          <button class="command-button" id="ignoreAnnotation" type="button">忽略</button>
+          <button class="command-button primary" id="verifyAnnotation" type="button">确认标注</button>
+        </section>
+
+        <section class="form-section box-readout">
+          <div class="section-row"><label id="activeBoxLabel">文字框</label><span id="boxCoordinates">0, 0, 0, 0</span></div>
+        </section>
+      </form>
+
+      <section class="sample-section">
+        <div class="pane-heading compact"><strong>样本</strong><span id="splitLabel">-</span></div>
+        <label>切分组<input id="splitGroupInput" type="text" autocomplete="off"></label>
+        <div class="grid-two">
+          <label>应用族<input id="appFamilyInput" type="text" autocomplete="off"></label>
+          <label>页面会话<input id="pageSessionInput" type="text" autocomplete="off"></label>
+        </div>
+        <div class="coverage-checks">
+          <label><input id="independenceReviewedInput" type="checkbox"> 切分隔离已复核</label>
+          <label><input id="textCompleteInput" type="checkbox"> 文字完整</label>
+          <label><input id="anchorsCompleteInput" type="checkbox"> 候选完整</label>
+          <label><input id="protectedCompleteInput" type="checkbox"> 保护区完整</label>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

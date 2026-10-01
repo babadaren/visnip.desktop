@@ -1,0 +1,114 @@
+{
+  "toolbar": {
+    "defaultMode": "compact",
+    "height": 30,
+    "button": 22,
+    "icon": 15,
+    "paddingX": 8,
+    "paddingY": 4,
+    "gap": 5,
+    "separatorWidth": 1,
+    "separatorHeight": 14,
+    "separatorBlock": 12,
+    "radius": 9,
+    "buttonRadius": 6,
+    "shadowBlur": 14,
+    "shadowOffsetY": 6,
+    "safeHitArea": 26
+  },
+  "buttons": [
+    {
+      "id": "tool-rect",
+      "label": "矩形",
+      "group": 1,
+      "priority": "P0"
+    },
+    {
+      "id": "tool-arrow",
+      "label": "箭头",
+      "group": 1,
+      "priority": "P0"
+    },
+    {
+      "id": "tool-pen",
+      "label": "画笔",
+      "group": 1,
+      "priority": "P0"
+    },
+    {
+      "id": "tool-text",
+      "label": "文字",
+      "group": 1,
+      "priority": "P0"
+    },
+    {
+      "id": "tool-mosaic",
+      "label": "马赛克",
+      "group": 1,
+      "priority": "P0"
+    },
+    {
+      "id": "tool-number",
+      "label": "序号",
+      "group": 1,
+      "priority": "P0"
+    },
+    {
+      "id": "action-undo",
+      "label": "撤销",
+      "group": 2,
+      "priority": "P0"
+    },
+    {
+      "id": "action-redo",
+      "label": "重做",
+      "group": 2,
+      "priority": "P0"
+    },
+    {
+      "id": "action-pin",
+      "label": "贴图",
+      "group": 3,
+      "priority": "P0"
+    },
+    {
+      "id": "action-save",
+      "label": "保存",
+      "group": 3,
+      "priority": "P0"
+    },
+    {
+      "id": "action-copy",
+      "label": "复制",
+      "group": 3,
+      "priority": "P0"
+    },
+    {
+      "id": "action-close",
+      "label": "关闭",
+      "group": 3,
+      "priority": "P0"
+    }
+  ],
+  "defaultOrder": [
+    "tool-rect",
+    "tool-arrow",
+    "tool-pen",
+    "tool-text",
+    "tool-mosaic",
+    "tool-number",
+    "action-undo",
+    "action-redo",
+    "action-pin",
+    "action-save",
+    "action-copy",
+    "action-close"
+  ],
+  "secondaryTools": [
+    "tool-ellipse",
+    "tool-highlight",
+    "tool-eyedropper",
+    "tool-magnifier",
+    "action-more"
+  ]
+}

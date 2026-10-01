@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows-package:
+    name: Windows package and draft release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that the tag matches the project version
+        id: version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          project=$(sed -nE 's/^[[:space:]]+VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -1)
+          if [ "$tag" != "$project" ]; then
+            echo "::error::Tag v$tag does not match CMakeLists.txt version $project"; exit 1
+          fi
+          echo "version=$project" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/windows-build
+        with:
+          online-translation: 'OFF'
+
+      - name: Tests
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --timeout 900
+
+      - name: Package
+        shell: pwsh
+        run: ./scripts/package-release.ps1 -BuildDir build -OutDir dist -Version ${{ steps.version.outputs.version }}
+
+      - name: Release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          awk -v heading="## $version" '$0 == heading {found=1; next} /^## / && found {exit} found' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "::error::CHANGELOG.md has no section for $version"; exit 1; fi
+          {
+            echo
+            echo '---'
+            echo 'Windows x64. Unzip and run `visnip.exe`. The build is not code-signed yet, so SmartScreen may warn on first start.'
+            echo 'Verify the download against the `.sha256` file. Offline translation resources are downloaded from the preferences, not included.'
+          } >> notes.md
+
+      - name: Create draft pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version='${{ steps.version.outputs.version }}'
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/Visnip-$version-windows-x64.zip" \
+            "dist/Visnip-$version-windows-x64.zip.sha256" \
+            --draft --prerelease --title "Visnip $version" --notes-file notes.md

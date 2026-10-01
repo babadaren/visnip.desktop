@@ -1,0 +1,1225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visnip AI 图片翻译窗口 V2</title>
+  <style>
+    :root {
+      --primary: #4f7cff;
+      --primary-hover: #416bdf;
+      --primary-soft: #eaf1ff;
+      --accent: #45d6b4;
+      --accent-soft: #e8faf5;
+      --text: #172033;
+      --secondary: #667085;
+      --muted: #98a2b3;
+      --surface: #ffffff;
+      --surface-2: #f8fafd;
+      --border: #dce5f2;
+      --shadow: 0 22px 56px rgba(26, 39, 68, 0.18), 0 3px 12px rgba(26, 39, 68, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+      letter-spacing: 0;
+    }
+
+    body {
+      margin: 0;
+      min-width: 1440px;
+      min-height: 900px;
+      overflow: hidden;
+      color: var(--text);
+      background: #edf2f8;
+      font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .stage {
+      position: relative;
+      width: 1440px;
+      height: 900px;
+      overflow: hidden;
+      background: #edf2f8;
+    }
+
+    .desktop-app {
+      position: absolute;
+      inset: 28px 32px;
+      overflow: hidden;
+      border: 1px solid #d7e0ed;
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 10px 34px rgba(42, 57, 85, 0.08);
+    }
+
+    .app-titlebar {
+      display: flex;
+      height: 50px;
+      align-items: center;
+      gap: 12px;
+      padding: 0 18px;
+      border-bottom: 1px solid #e5ebf4;
+      color: #4b5565;
+      background: #fbfcfe;
+      font-size: 13px;
+    }
+
+    .browser-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #d9e1ec;
+    }
+
+    .address {
+      width: 430px;
+      height: 28px;
+      padding: 5px 12px;
+      border: 1px solid #dce5f2;
+      border-radius: 6px;
+      background: #fff;
+      color: #8791a2;
+    }
+
+    .app-body {
+      display: grid;
+      height: calc(100% - 50px);
+      grid-template-columns: 208px 1fr;
+    }
+
+    .side-nav {
+      padding: 24px 16px;
+      border-right: 1px solid #e3eaf3;
+      background: #f8fafd;
+    }
+
+    .side-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 8px 24px;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .side-brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      background: #172033;
+      color: #7ca0ff;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .nav-item {
+      height: 38px;
+      margin-bottom: 6px;
+      padding: 9px 12px;
+      border-radius: 6px;
+      color: #647087;
+      font-size: 13px;
+    }
+
+    .nav-item.active {
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .workspace {
+      padding: 34px 38px;
+      background: #ffffff;
+    }
+
+    .workspace h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .workspace-subtitle {
+      margin-bottom: 30px;
+      color: #7f8a9d;
+      font-size: 13px;
+    }
+
+    .metrics {
+      display: grid;
+      width: 700px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .metric {
+      padding: 18px;
+      border: 1px solid #e0e7f1;
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    .metric-label {
+      color: #768195;
+      font-size: 12px;
+    }
+
+    .metric-value {
+      margin-top: 9px;
+      font-size: 25px;
+      font-weight: 700;
+    }
+
+    .table-shell {
+      width: 700px;
+      overflow: hidden;
+      border: 1px solid #e0e7f1;
+      border-radius: 7px;
+    }
+
+    .table-row {
+      display: grid;
+      height: 52px;
+      align-items: center;
+      grid-template-columns: 1.2fr 1fr 0.9fr 0.8fr;
+      padding: 0 18px;
+      border-bottom: 1px solid #edf1f6;
+      color: #566176;
+      font-size: 12px;
+    }
+
+    .table-row.head {
+      height: 42px;
+      background: #f8fafd;
+      color: #788398;
+      font-weight: 600;
+    }
+
+    .selection {
+      position: absolute;
+      left: 356px;
+      top: 312px;
+      width: 264px;
+      height: 112px;
+      border: 2px solid var(--primary);
+      background: rgba(255, 255, 255, 0.06);
+      box-shadow: 0 0 0 9999px rgba(30, 40, 58, 0.25);
+    }
+
+    .selection::before,
+    .selection::after {
+      content: "";
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border: 1px solid var(--primary);
+      background: #fff;
+    }
+
+    .selection::before {
+      left: -5px;
+      top: -5px;
+    }
+
+    .selection::after {
+      right: -5px;
+      bottom: -5px;
+    }
+
+    .selection-size {
+      position: absolute;
+      left: -2px;
+      top: -30px;
+      height: 24px;
+      padding: 4px 9px;
+      border-radius: 5px;
+      background: #263044;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .translation-window {
+      position: absolute;
+      right: 28px;
+      top: 40px;
+      z-index: 10;
+      width: 380px;
+      height: 820px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .window-header {
+      display: flex;
+      height: 62px;
+      align-items: center;
+      padding: 0 14px 0 16px;
+      border-bottom: 1px solid #e5ebf3;
+      background: #ffffff;
+      cursor: move;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .brand-icon {
+      position: relative;
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      margin-right: 11px;
+      border-radius: 7px;
+      background: var(--primary);
+    }
+
+    .brand-icon::before,
+    .brand-icon::after {
+      content: "";
+      position: absolute;
+      height: 2px;
+      background: #fff;
+      transform-origin: left center;
+    }
+
+    .brand-icon::before {
+      left: 9px;
+      top: 11px;
+      width: 11px;
+      transform: rotate(55deg);
+    }
+
+    .brand-icon::after {
+      left: 17px;
+      top: 23px;
+      width: 13px;
+      transform: rotate(-58deg);
+    }
+
+    .title-group {
+      min-width: 0;
+    }
+
+    .window-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 20px;
+    }
+
+    .window-subtitle {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 16px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+      cursor: default;
+    }
+
+    .icon-button {
+      display: inline-grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 0;
+      border-radius: 6px;
+      color: #627087;
+      background: transparent;
+    }
+
+    .icon-button.subtle {
+      border: 1px solid #dce5f2;
+      background: #f8fafd;
+    }
+
+    .icon {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .language-row {
+      display: grid;
+      height: 78px;
+      align-items: center;
+      grid-template-columns: 1fr 28px 1fr;
+      gap: 7px;
+      padding: 10px 16px;
+      border-bottom: 1px solid #edf1f6;
+      background: #fbfcfe;
+    }
+
+    .language-field label {
+      display: block;
+      margin-bottom: 5px;
+      color: #8b96a8;
+      font-size: 10px;
+    }
+
+    .select-box {
+      position: relative;
+      height: 33px;
+      padding: 7px 30px 7px 10px;
+      border: 1px solid #d9e3ef;
+      border-radius: 6px;
+      background: #fff;
+      color: #344056;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .select-box::after {
+      content: "";
+      position: absolute;
+      right: 10px;
+      top: 12px;
+      width: 6px;
+      height: 6px;
+      border-right: 1.5px solid #7d899b;
+      border-bottom: 1.5px solid #7d899b;
+      transform: rotate(45deg);
+    }
+
+    .language-arrow {
+      color: #9ca7b8;
+      text-align: center;
+      font-size: 16px;
+    }
+
+    .window-content {
+      padding: 14px 16px 16px;
+    }
+
+    .mode-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .segmented {
+      display: grid;
+      width: 190px;
+      height: 32px;
+      grid-template-columns: 1fr 1fr;
+      padding: 3px;
+      border: 1px solid #e0e7f1;
+      border-radius: 7px;
+      background: #f3f6fa;
+    }
+
+    .segment {
+      border: 0;
+      border-radius: 5px;
+      color: #7a8699;
+      background: transparent;
+      font-size: 12px;
+    }
+
+    .segment.active {
+      color: var(--primary);
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(34, 50, 78, 0.1);
+      font-weight: 600;
+    }
+
+    .image-dimensions {
+      margin-left: auto;
+      color: #98a2b3;
+      font-size: 11px;
+    }
+
+    .preview-shell {
+      position: relative;
+      height: 316px;
+      overflow: hidden;
+      border: 1px solid #dce5f2;
+      border-radius: 7px;
+      background: #eef3f8;
+    }
+
+    .preview-toolbar {
+      position: absolute;
+      z-index: 2;
+      right: 8px;
+      top: 8px;
+      display: flex;
+      gap: 5px;
+    }
+
+    .result-image {
+      position: absolute;
+      inset: 21px 14px;
+      overflow: hidden;
+      border: 1px solid #d8e0ea;
+      border-radius: 5px;
+      background: #fff;
+      box-shadow: 0 5px 16px rgba(45, 62, 92, 0.12);
+    }
+
+    .result-browser {
+      display: flex;
+      height: 28px;
+      align-items: center;
+      gap: 5px;
+      padding: 0 9px;
+      border-bottom: 1px solid #e4eaf2;
+      background: #f7f9fc;
+    }
+
+    .result-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #cbd4e0;
+    }
+
+    .result-address {
+      width: 156px;
+      height: 15px;
+      margin-left: 5px;
+      border-radius: 4px;
+      background: #e9eef5;
+    }
+
+    .result-layout {
+      display: grid;
+      height: calc(100% - 28px);
+      grid-template-columns: 78px 1fr;
+    }
+
+    .result-side {
+      padding: 12px 8px;
+      border-right: 1px solid #edf1f6;
+      background: #f8fafc;
+    }
+
+    .result-logo {
+      margin-bottom: 13px;
+      color: #243047;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .result-nav {
+      height: 20px;
+      margin-bottom: 5px;
+      padding: 5px 6px;
+      border-radius: 4px;
+      color: #8390a4;
+      font-size: 7px;
+    }
+
+    .result-nav.active {
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .result-main {
+      padding: 13px 14px;
+    }
+
+    .result-title {
+      margin-bottom: 3px;
+      color: #263249;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .result-caption {
+      margin-bottom: 10px;
+      color: #96a1b1;
+      font-size: 7px;
+    }
+
+    .result-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+
+    .result-card {
+      height: 45px;
+      padding: 7px;
+      border: 1px solid #e3e9f1;
+      border-radius: 5px;
+    }
+
+    .result-card-label {
+      color: #93a0b2;
+      font-size: 6px;
+    }
+
+    .result-card-value {
+      margin-top: 5px;
+      color: #29364c;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .result-card-value.green {
+      color: #1f9a7e;
+    }
+
+    .result-table {
+      overflow: hidden;
+      border: 1px solid #e3e9f1;
+      border-radius: 5px;
+    }
+
+    .result-table-row {
+      display: grid;
+      height: 24px;
+      align-items: center;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      padding: 0 8px;
+      border-bottom: 1px solid #edf1f6;
+      color: #6f7c90;
+      font-size: 6px;
+    }
+
+    .result-table-row.head {
+      height: 21px;
+      background: #f8fafd;
+      color: #929daf;
+      font-weight: 700;
+    }
+
+    .status-line {
+      display: flex;
+      min-height: 50px;
+      align-items: center;
+      padding: 9px 2px;
+    }
+
+    .status-check {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      flex: 0 0 24px;
+      margin-right: 9px;
+      border-radius: 50%;
+      background: var(--accent-soft);
+    }
+
+    .status-check::after {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 6px;
+      width: 8px;
+      height: 4px;
+      border-left: 2px solid #1f9f81;
+      border-bottom: 2px solid #1f9f81;
+      transform: rotate(-45deg);
+    }
+
+    .status-copy strong {
+      display: block;
+      color: #2c394f;
+      font-size: 12px;
+      line-height: 16px;
+    }
+
+    .status-copy span {
+      display: block;
+      color: #8c97a9;
+      font-size: 10px;
+      line-height: 15px;
+    }
+
+    .retranslate {
+      display: inline-flex;
+      height: 30px;
+      align-items: center;
+      gap: 5px;
+      margin-left: auto;
+      padding: 0 9px;
+      border: 1px solid #dce5f2;
+      border-radius: 6px;
+      color: #536178;
+      background: #fff;
+      font-size: 11px;
+    }
+
+    .action-row {
+      display: grid;
+      height: 42px;
+      grid-template-columns: 1fr 1fr 1.35fr;
+      gap: 8px;
+    }
+
+    .action-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid #d9e3ef;
+      border-radius: 6px;
+      color: #46536a;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .action-button.primary {
+      border-color: var(--primary);
+      color: #fff;
+      background: var(--primary);
+    }
+
+    .history {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #e6ebf2;
+    }
+
+    .history-header {
+      display: flex;
+      height: 24px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .history-title {
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .history-count {
+      margin-left: 6px;
+      color: #98a2b3;
+      font-size: 10px;
+    }
+
+    .history-link {
+      margin-left: auto;
+      color: var(--primary);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .history-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .history-item {
+      display: block;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      color: inherit;
+      background: transparent;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .history-thumb {
+      position: relative;
+      height: 58px;
+      overflow: hidden;
+      border: 1px solid #e0e7f1;
+      border-radius: 6px;
+      background: #f5f8fc;
+    }
+
+    .history-thumb::before {
+      content: "";
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 10px;
+      height: 6px;
+      border-radius: 2px;
+      background: #dce5f2;
+      box-shadow: 0 12px 0 #e5ebf3, 0 24px 0 #edf1f6;
+    }
+
+    .history-thumb.active {
+      border-color: #9db7ff;
+      background: #f4f7ff;
+    }
+
+    .history-item:hover .history-thumb,
+    .history-item:focus-visible .history-thumb {
+      border-color: #9db7ff;
+      box-shadow: 0 0 0 2px rgba(79, 124, 255, 0.12);
+    }
+
+    .history-item:focus-visible {
+      outline: none;
+    }
+
+    .history-meta {
+      margin-top: 4px;
+      overflow: hidden;
+      color: #8c97a8;
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .viewer-backdrop {
+      position: absolute;
+      z-index: 40;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 36px;
+      background: rgba(23, 32, 51, 0.38);
+    }
+
+    .viewer-backdrop[hidden] {
+      display: none;
+    }
+
+    .image-viewer {
+      display: grid;
+      width: min(900px, calc(100vw - 72px));
+      height: min(680px, calc(100vh - 72px));
+      overflow: hidden;
+      grid-template-rows: 58px 1fr 58px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 26px 72px rgba(18, 29, 51, 0.32);
+    }
+
+    .viewer-header {
+      display: flex;
+      align-items: center;
+      padding: 0 14px 0 18px;
+      border-bottom: 1px solid #e4eaf2;
+    }
+
+    .viewer-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .viewer-meta {
+      margin-left: 10px;
+      color: #8d98aa;
+      font-size: 11px;
+    }
+
+    .viewer-close {
+      margin-left: auto;
+    }
+
+    .viewer-canvas {
+      position: relative;
+      overflow: auto;
+      background: #eef3f8;
+    }
+
+    .viewer-image-host {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 320px;
+      height: 274px;
+      transform: translate(-50%, -50%) scale(1.85);
+      transform-origin: center;
+    }
+
+    .viewer-image-host .result-image {
+      inset: 0;
+      width: 320px;
+      height: 274px;
+      box-shadow: 0 5px 18px rgba(38, 52, 80, 0.14);
+    }
+
+    .viewer-footer {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 14px;
+      border-top: 1px solid #e4eaf2;
+      background: #fff;
+    }
+
+    .zoom-value {
+      width: 48px;
+      color: #6f7b8f;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .viewer-spacer {
+      flex: 1;
+    }
+
+    .viewer-action {
+      display: inline-flex;
+      height: 32px;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      border: 1px solid #d9e3ef;
+      border-radius: 6px;
+      color: #46536a;
+      background: #fff;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .viewer-action.primary {
+      border-color: var(--primary);
+      color: #fff;
+      background: var(--primary);
+    }
+
+    @media (max-width: 900px) {
+      body {
+        min-width: 0;
+      }
+
+      .stage {
+        width: 100vw;
+        height: 100vh;
+      }
+
+      .desktop-app {
+        display: none;
+      }
+
+      .translation-window {
+        top: 20px;
+        right: 20px;
+        width: min(380px, calc(100vw - 40px));
+        height: min(820px, calc(100vh - 40px));
+      }
+
+      .image-viewer {
+        width: min(680px, calc(100vw - 40px));
+        height: min(680px, calc(100vh - 40px));
+      }
+
+      .viewer-image-host {
+        transform: translate(-50%, -50%) scale(1.55);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .translation-window {
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .viewer-backdrop {
+        padding: 0;
+      }
+
+      .image-viewer {
+        width: 100vw;
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
+      }
+
+      .viewer-image-host {
+        transform: translate(-50%, -50%) scale(1.05);
+      }
+
+      .window-header {
+        padding-left: 12px;
+      }
+
+      .language-row,
+      .window-content {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="M7 7l10 10"></path><path d="M17 7 7 17"></path></symbol>
+    <symbol id="icon-more" viewBox="0 0 24 24"><circle cx="6.5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="17.5" cy="12" r="1"></circle></symbol>
+    <symbol id="icon-copy" viewBox="0 0 24 24"><rect x="8.2" y="8.2" width="9.8" height="9.8" rx="1.5"></rect><path d="M6.1 15.1H5.2a1 1 0 0 1-1-1V6.1a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V7"></path></symbol>
+    <symbol id="icon-save" viewBox="0 0 24 24"><path d="M6.2 5.4h9.1l2.5 2.5v10.7H6.2z"></path><path d="M9.1 5.4v4.7h5.8V5.4"></path><path d="M9.2 18.6v-4.7h5.6v4.7"></path></symbol>
+    <symbol id="icon-zoom" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.7"></circle><path d="M15 15l4 4"></path><path d="M10.5 8v5"></path><path d="M8 10.5h5"></path></symbol>
+    <symbol id="icon-translate" viewBox="0 0 24 24"><path d="M7.4 4.4v1.4"></path><path d="M4.2 7.2h6.4"></path><path d="M10.1 9.2 4.6 16.6"></path><path d="M4.9 9.2l5.5 7.4"></path><path d="M13.4 19.4l3.7-8.8 3.7 8.8"></path><path d="M14.8 16.2h4.6"></path></symbol>
+  </svg>
+  <main class="stage" aria-label="Visnip AI 图片翻译独立窗口效果图">
+    <section class="desktop-app" aria-hidden="true">
+      <div class="app-titlebar">
+        <span class="browser-dot"></span>
+        <span class="browser-dot"></span>
+        <span class="browser-dot"></span>
+        <div class="address">https://example.local/dashboard</div>
+      </div>
+      <div class="app-body">
+        <aside class="side-nav">
+          <div class="side-brand"><span class="side-brand-mark">V</span>Visnip Demo</div>
+          <div class="nav-item active">Overview</div>
+          <div class="nav-item">Orders</div>
+          <div class="nav-item">Customers</div>
+          <div class="nav-item">Reports</div>
+        </aside>
+        <section class="workspace">
+          <h1>Account overview</h1>
+          <div class="workspace-subtitle">Review activity and recent transactions</div>
+          <div class="metrics">
+            <div class="metric"><div class="metric-label">TOTAL REVENUE</div><div class="metric-value">$48,210</div></div>
+            <div class="metric"><div class="metric-label">ACTIVE USERS</div><div class="metric-value">1,284</div></div>
+            <div class="metric"><div class="metric-label">CONVERSION</div><div class="metric-value">12.8%</div></div>
+          </div>
+          <div class="table-shell">
+            <div class="table-row head"><span>Customer</span><span>Status</span><span>Amount</span><span>Date</span></div>
+            <div class="table-row"><span>Alex Morgan</span><span>Completed</span><span>$820.00</span><span>Jul 12</span></div>
+            <div class="table-row"><span>Jamie Chen</span><span>Pending</span><span>$468.00</span><span>Jul 11</span></div>
+            <div class="table-row"><span>Chris Davis</span><span>Completed</span><span>$1,240.00</span><span>Jul 10</span></div>
+          </div>
+        </section>
+      </div>
+      <div class="selection"><span class="selection-size">264 × 112 px</span></div>
+    </section>
+
+    <section class="translation-window" aria-label="Visnip AI 图片翻译窗口">
+      <header class="window-header">
+        <span class="brand-icon" aria-hidden="true"></span>
+        <div class="title-group">
+          <div class="window-title">Visnip 图片翻译</div>
+          <div class="window-subtitle">独立窗口 · 264 × 112 px</div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-button" aria-label="更多"><svg class="icon"><use href="#icon-more"></use></svg></button>
+          <button class="icon-button" aria-label="关闭"><svg class="icon"><use href="#icon-close"></use></svg></button>
+        </div>
+      </header>
+
+      <div class="language-row">
+        <div class="language-field">
+          <label>源语言</label>
+          <div class="select-box">自动识别 · 英语</div>
+        </div>
+        <div class="language-arrow">→</div>
+        <div class="language-field">
+          <label>目标语言</label>
+          <div class="select-box">简体中文</div>
+        </div>
+      </div>
+
+      <div class="window-content">
+        <div class="mode-row">
+          <div class="segmented" role="tablist">
+            <button class="segment active" role="tab">翻译结果</button>
+            <button class="segment" role="tab">原图</button>
+          </div>
+          <span class="image-dimensions">PNG · 原尺寸输出</span>
+        </div>
+
+        <div class="preview-shell">
+          <div class="preview-toolbar">
+            <button class="icon-button subtle open-viewer" aria-label="查看大图"><svg class="icon"><use href="#icon-zoom"></use></svg></button>
+          </div>
+          <div class="result-image">
+            <div class="result-browser">
+              <span class="result-dot"></span><span class="result-dot"></span><span class="result-dot"></span>
+              <span class="result-address"></span>
+            </div>
+            <div class="result-layout">
+              <aside class="result-side">
+                <div class="result-logo">数据中心</div>
+                <div class="result-nav active">总览</div>
+                <div class="result-nav">订单</div>
+                <div class="result-nav">客户</div>
+                <div class="result-nav">报表</div>
+              </aside>
+              <section class="result-main">
+                <div class="result-title">账户概览</div>
+                <div class="result-caption">查看业务动态与近期交易</div>
+                <div class="result-cards">
+                  <div class="result-card"><div class="result-card-label">总收入</div><div class="result-card-value">¥348,210</div></div>
+                  <div class="result-card"><div class="result-card-label">活跃用户</div><div class="result-card-value">1,284</div></div>
+                  <div class="result-card"><div class="result-card-label">转化率</div><div class="result-card-value green">12.8%</div></div>
+                </div>
+                <div class="result-table">
+                  <div class="result-table-row head"><span>客户</span><span>状态</span><span>金额</span></div>
+                  <div class="result-table-row"><span>Alex Morgan</span><span>已完成</span><span>¥820.00</span></div>
+                  <div class="result-table-row"><span>Jamie Chen</span><span>待处理</span><span>¥468.00</span></div>
+                  <div class="result-table-row"><span>Chris Davis</span><span>已完成</span><span>¥1,240.00</span></div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div class="status-line">
+          <span class="status-check" aria-hidden="true"></span>
+          <div class="status-copy">
+            <strong>翻译完成</strong>
+            <span>12.4 秒 · Gemini 图片模型</span>
+          </div>
+          <button class="retranslate"><svg class="icon"><use href="#icon-translate"></use></svg>重新翻译</button>
+        </div>
+
+        <div class="action-row">
+          <button class="action-button"><svg class="icon"><use href="#icon-copy"></use></svg>复制</button>
+          <button class="action-button open-viewer"><svg class="icon"><use href="#icon-zoom"></use></svg>打开大图</button>
+          <button class="action-button primary"><svg class="icon"><use href="#icon-save"></use></svg>保存图片</button>
+        </div>
+
+        <section class="history">
+          <div class="history-header">
+            <span class="history-title">最近翻译</span>
+            <span class="history-count">3</span>
+            <span class="history-link">查看全部</span>
+          </div>
+          <div class="history-strip">
+            <button class="history-item" data-language="简体中文" data-time="刚刚"><div class="history-thumb active"></div><div class="history-meta">刚刚 · 简体中文</div></button>
+            <button class="history-item" data-language="日语" data-time="18:26"><div class="history-thumb"></div><div class="history-meta">18:26 · 日语</div></button>
+            <button class="history-item" data-language="简体中文" data-time="昨天"><div class="history-thumb"></div><div class="history-meta">昨天 · 简体中文</div></button>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <div class="viewer-backdrop" id="historyViewer" hidden>
+      <section class="image-viewer" role="dialog" aria-modal="true" aria-labelledby="viewerTitle">
+        <header class="viewer-header">
+          <span class="viewer-title" id="viewerTitle">历史翻译 · 简体中文</span>
+          <span class="viewer-meta" id="viewerMeta">刚刚 · 264 × 112 px</span>
+          <button class="icon-button viewer-close" aria-label="关闭大图"><svg class="icon"><use href="#icon-close"></use></svg></button>
+        </header>
+        <div class="viewer-canvas">
+          <div class="viewer-image-host" id="viewerImageHost"></div>
+        </div>
+        <footer class="viewer-footer">
+          <button class="icon-button subtle zoom-out" aria-label="缩小">−</button>
+          <span class="zoom-value">185%</span>
+          <button class="icon-button subtle zoom-in" aria-label="放大">+</button>
+          <span class="viewer-spacer"></span>
+          <button class="viewer-action"><svg class="icon"><use href="#icon-copy"></use></svg>复制</button>
+          <button class="viewer-action primary"><svg class="icon"><use href="#icon-save"></use></svg>保存图片</button>
+        </footer>
+      </section>
+    </div>
+  </main>
+  <script>
+    const stage = document.querySelector('.stage');
+    const translationWindow = document.querySelector('.translation-window');
+    const dragHandle = document.querySelector('.window-header');
+    let dragState = null;
+
+    dragHandle.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button') || translationWindow.offsetWidth >= stage.clientWidth) {
+        return;
+      }
+      const rect = translationWindow.getBoundingClientRect();
+      translationWindow.style.left = `${rect.left}px`;
+      translationWindow.style.right = 'auto';
+      dragState = {
+        pointerId: event.pointerId,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top
+      };
+      dragHandle.setPointerCapture(event.pointerId);
+    });
+
+    dragHandle.addEventListener('pointermove', (event) => {
+      if (!dragState || dragState.pointerId !== event.pointerId) {
+        return;
+      }
+      const maxX = stage.clientWidth - translationWindow.offsetWidth;
+      const maxY = stage.clientHeight - translationWindow.offsetHeight;
+      const x = Math.max(0, Math.min(maxX, event.clientX - dragState.offsetX));
+      const y = Math.max(0, Math.min(maxY, event.clientY - dragState.offsetY));
+      translationWindow.style.left = `${x}px`;
+      translationWindow.style.top = `${y}px`;
+    });
+
+    dragHandle.addEventListener('pointerup', (event) => {
+      if (dragState?.pointerId === event.pointerId) {
+        dragHandle.releasePointerCapture(event.pointerId);
+        dragState = null;
+      }
+    });
+
+    const viewer = document.getElementById('historyViewer');
+    const viewerTitle = document.getElementById('viewerTitle');
+    const viewerMeta = document.getElementById('viewerMeta');
+    const viewerImageHost = document.getElementById('viewerImageHost');
+    const zoomValue = viewer.querySelector('.zoom-value');
+    let viewerZoom = 1.85;
+
+    function defaultViewerZoom() {
+      if (window.innerWidth <= 480) return 1.05;
+      if (window.innerWidth <= 900) return 1.55;
+      return 1.85;
+    }
+
+    function applyViewerZoom() {
+      viewerImageHost.style.transform = `translate(-50%, -50%) scale(${viewerZoom})`;
+      zoomValue.textContent = `${Math.round(viewerZoom * 100)}%`;
+    }
+
+    function openViewer(language = '简体中文', time = '刚刚') {
+      const preview = document.querySelector('.result-image').cloneNode(true);
+      viewerImageHost.replaceChildren(preview);
+      viewerTitle.textContent = `历史翻译 · ${language}`;
+      viewerMeta.textContent = `${time} · 264 × 112 px`;
+      viewerZoom = defaultViewerZoom();
+      applyViewerZoom();
+      viewer.hidden = false;
+      viewer.querySelector('.viewer-close').focus();
+    }
+
+    function closeViewer() {
+      viewer.hidden = true;
+    }
+
+    document.querySelectorAll('.history-item').forEach((item) => {
+      item.addEventListener('click', () => openViewer(item.dataset.language, item.dataset.time));
+    });
+    document.querySelectorAll('.open-viewer').forEach((button) => {
+      button.addEventListener('click', () => openViewer());
+    });
+    viewer.querySelector('.viewer-close').addEventListener('click', closeViewer);
+    viewer.addEventListener('click', (event) => {
+      if (event.target === viewer) closeViewer();
+    });
+    viewer.querySelector('.zoom-out').addEventListener('click', () => {
+      viewerZoom = Math.max(0.75, viewerZoom - 0.25);
+      applyViewerZoom();
+    });
+    viewer.querySelector('.zoom-in').addEventListener('click', () => {
+      viewerZoom = Math.min(3, viewerZoom + 0.25);
+      applyViewerZoom();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !viewer.hidden) closeViewer();
+    });
+    if (new URLSearchParams(window.location.search).has('viewer')) {
+      openViewer('日语', '18:26');
+    }
+  </script>
+</body>
+</html>

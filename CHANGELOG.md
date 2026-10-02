@@ -2,6 +2,12 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
+## 0.4.4
+
+- The translate button in the toolbar has a new icon ("文 A"), drawn in the same line style as the other toolbar icons.
+- A shorter README, plus contributor documentation: `CONTRIBUTING.md`, issue forms, a pull request checklist and private security reporting.
+- The documentation describes the current translation design; working notes of earlier versions moved to `docs/history/`.
+
 ## 0.4.3
 
 ### In-app updates

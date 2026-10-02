@@ -2,8 +2,8 @@
 IDI_VISNIP_ICON ICON "../docs/assets/app/visnip.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,4,3,0
- PRODUCTVERSION 0,4,3,0
+ FILEVERSION 0,4,4,0
+ PRODUCTVERSION 0,4,4,0
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0x0L
  FILEOS VOS_NT_WINDOWS32
@@ -16,11 +16,11 @@ BEGIN
   BEGIN
    VALUE "CompanyName", "Visnip Project\0"
    VALUE "FileDescription", "Visnip screenshot and offline translation preview\0"
-   VALUE "FileVersion", "0.4.3\0"
+   VALUE "FileVersion", "0.4.4\0"
    VALUE "InternalName", "visnip\0"
    VALUE "OriginalFilename", "visnip.exe\0"
    VALUE "ProductName", "Visnip\0"
-   VALUE "ProductVersion", "0.4.3\0"
+   VALUE "ProductVersion", "0.4.4\0"
   END
  END
  BLOCK "VarFileInfo"

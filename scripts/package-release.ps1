@@ -1,6 +1,6 @@
 # Builds the redistributable Windows folder and zip from an existing Release build.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\package-release.ps1 -BuildDir build -Version 0.4.3
+#   powershell -ExecutionPolicy Bypass -File scripts\package-release.ps1 -BuildDir build -Version 0.4.4
 #
 # Requirements: windeployqt (Qt bin) and g++ (MinGW bin) on PATH, OCR assets
 # fetched with scripts\fetch_ocr_assets.ps1 before the build was configured.

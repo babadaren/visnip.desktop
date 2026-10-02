@@ -1,0 +1,66 @@
+name: 问题反馈
+description: Visnip 出错、崩溃或结果不对
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！安全问题请不要在这里提交，按 SECURITY.md 私下报告。
+        截图和日志可能含有个人信息，贴出前请先检查或打码。
+  - type: input
+    id: version
+    attributes:
+      label: Visnip 版本
+      description: 首选项 → 关于 里显示的版本号
+      placeholder: 0.4.3
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本
+      placeholder: Windows 11 23H2 x64
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的功能
+      options:
+        - 截图 / 标注
+        - 长截图
+        - 贴图
+        - 离线翻译 / 离线资源下载
+        - AI 解题
+        - 更新
+        - 设置 / 快捷键
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 看到的现象和提示文字
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 按 F1 框选……
+        2. 点击……
+        3. 出现……
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望的结果
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（可选）
+      description: 程序目录下 logs/visnip-perf.log 中出问题前后的几十行。日志不记录截图里的文字，但请检查后再贴。
+      render: text

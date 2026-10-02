@@ -1,0 +1,9 @@
+# Actions are pinned to commit SHAs; Dependabot proposes the updates.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/windows-build
+    schedule:
+      interval: monthly

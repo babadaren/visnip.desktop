@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 私下报告安全问题
+    url: https://github.com/babadaren/Visnip.desktop/security/advisories/new
+    about: 安全漏洞请不要公开提交，用这里私下报告。
+  - name: 官网与下载
+    url: https://visnip.com/
+    about: 功能介绍、下载和常见问题。

@@ -110,11 +110,11 @@ ctest --preset debug
 本机离线分两档：
 
 - **轻量（默认）**：C++ 本机 OCR → 本地 `llama-server`（Hy-MT2-1.8B Q4_K_M，仅监听 127.0.0.1，每次启动随机令牌）→ 客户端内原位回填。不需要 Python、PyTorch 或显卡，下载约 1.1 GiB。换行的正文按段落翻译再按原行宽拆回各行；按本机实测速度自动选择 1、2 或 4 路并发。截图（F1）时预热模型，空闲 10 分钟释放。设计与实测见 `docs/offline-lite-tier.md`。
-- **精细**：Python 整图引擎，额外用 Hi-SAM 分割笔画、LaMa 修复复杂背景，需要约 6 GiB 资源，建议有独立显卡。它的资源没有官方整包，0.4.1 起不再提供下载；以前装好的精细资源仍可使用。
+- **精细**：Python 整图引擎，额外用 Hi-SAM 分割笔画、LaMa 修复复杂背景，需要约 6 GiB 资源，建议有独立显卡。它的资源没有官方整包，0.4.1 起不再提供下载；以前装好的精细资源仍可使用。精细档的 Python 推理引擎在未开源的服务端仓库中维护，本仓库 `resources/offline/` 里只有同步过来的客户端副本，单独无法运行。
 
 离线推理不上传截图或文字，也不会自动回退在线服务。普通截图、标注和贴图不需要加载模型。两档目前都只开放中英互译。Windows 发布者代码签名仍待配置。详情见 `docs/offline-resource-manager.md`。
 
-实施阶段、模型包设计、待确认事项与验收要求见 `docs/translation-engine-architecture.md`。
+各处理方式的数据边界、引擎设计原则和验收要求见 `docs/translation-engine-architecture.md`。
 
 ```bat
 set PATH=C:\ProgramData\mingw64\mingw64\bin;C:\Qt\6.4.2\mingw_64\bin;%PATH%
@@ -144,6 +144,10 @@ scripts\smoke-debug.cmd
 “Visnip”名称和图标不在 Apache License 的授权范围内。修改后再发布的版本请使用不同的名称和图标。
 
 安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
+
+## 参与贡献
+
+欢迎提交问题和改进。开发环境、构建测试方法和必须遵守的原则（不悄悄联网、第三方文件来自官方渠道等）见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 持续集成与发布
 

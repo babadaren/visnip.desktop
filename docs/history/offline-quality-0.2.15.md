@@ -1,4 +1,6 @@
-# 本机离线质量与评测改进（0.2.15 / 0.2.16）
+# 本机离线质量与评测改进（0.2.15 / 0.2.16，历史记录）
+
+> 历史记录，保留为精细档质量工作的参考。精细档的 Python 推理引擎（`vislate_engine`、`vislate_server`）在未开源的服务端仓库中维护，本仓库的 `resources/offline/` 只有同步过来的客户端副本，所以下文提到的引擎测试和评分脚本无法在本仓库运行。0.4.1 起精细档不再提供下载。
 
 本轮继续按“先量化、再修可见失败”的顺序推进，未更换模型，也未改动协议。
 
@@ -16,7 +18,7 @@
 | --- | --- |
 | 引擎 Python 测试（`vislate-server`） | 297 通过 / 7 跳过（含新增 `test_fit_degradation.py` 5 项、`test_quality_score.py` 3 项） |
 | 桌面 CTest（Release，offscreen） | 5/5 目标通过 |
-| 真实字体环境（`QT_QPA_FONTDIR=C:\Windows\Fonts`） | 87 通过 / 2 失败：`fragmentedSingleLineBoxesRecoverFullSentence`、`shortLabelDoesNotExpandAcrossNearbyArtwork`，与 `translation-engine-architecture.md` 记录的既有失败完全一致，无新增回归 |
+| 真实字体环境（`QT_QPA_FONTDIR=C:\Windows\Fonts`） | 87 通过 / 2 失败：`fragmentedSingleLineBoxesRecoverFullSentence`、`shortLabelDoesNotExpandAcrossNearbyArtwork`，与 `docs/translation-engine-architecture.md` 记录的既有失败完全一致，无新增回归 |
 | 真实 GPU 端到端（RTX 3050 Ti 4 GB，CUDA + Vulkan，precise，两张真实回归图译英） | 28 区域，10 应用（35.7%），13 区域本就等价，1 `layout_unfit`、2 `artwork_collision`、2 `no_confident_text_mask`；框外改动像素 0；受保护区域改动 0 |
 | 单次耗时（不含模型加载，同批） | p50 5314 ms，p95 5636 ms；分解 p50：OCR 1044、翻译 1620、分割 1164、背景修复 1148（含合成 1469） |
 | 降级链在真实截图上生效 | `source_size` 4、`shrunk` 4、`tight_leading` 1、`collision_shrunk` 1（即 6 个区域靠降级链才被回填） |
@@ -29,19 +31,7 @@
 
 ## 复现
 
-```powershell
-# 引擎测试（在服务端仓库的 vislate-server 目录）
-.\.venv\Scripts\python -m pytest -q
-# 引擎同步到桌面内嵌资源（在服务端仓库根目录）
-.\vislate-server\.venv\Scripts\python.exe scripts\sync_desktop_offline_adapter.py --desktop <visnip-desktop 仓库路径>
-# 构建 + 测试 + 打包（在本仓库根目录）
-scripts\package-release.cmd
-# 评分（单个结果或目录批量，脚本在服务端仓库的 vislate-server\scripts）
-.\vislate-server\.venv\Scripts\python.exe .\vislate-server\scripts\score_translation_quality.py --result out.json --source input.png
-.\vislate-server\.venv\Scripts\python.exe .\vislate-server\scripts\score_translation_quality.py --batch results
-```
-
-会话工作进程会删除任务输入图片，批量评分时请自行保留原图，或接受“框外像素”指标为 `null`。
+引擎测试和评分脚本在未开源的服务端仓库中，这里不再列出命令。本仓库的部分可以照常构建、测试和打包（见仓库根目录的 `CONTRIBUTING.md`）。
 
 ## 0.2.16：数字格式误判导致翻译区域被丢弃
 
@@ -79,5 +69,5 @@ scripts\package-release.cmd
 - `layout.py::compose` 与 `unified_composition.py::compose` 仍是两份实现，前者只剩测试在用；需要合并为一份再删除，避免第二事实源。
 - 术语表仍硬编码在 `translation_policy.py`，尚未外置为可更新资源包。
 - 桌面内嵌引擎与 `vislate_server/vislate_engine` 仍靠同步脚本维护，未改为单一来源。
-- 模型权重与训练/验证素材的再分发许可仍未逐项核对（发布计划 P0-11/P0-12）。
+- 模型权重与训练/验证素材的再分发许可仍未逐项核对。
 - 长段落只有一次重试；数字修复后仍可能出现真实丢数，下一轮考虑「按缺失 token 定向重试」或把超长段落拆句翻译。

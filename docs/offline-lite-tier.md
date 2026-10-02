@@ -1,6 +1,6 @@
 # 本机离线 · 轻量档
 
-更新日期：2026-10-01
+更新日期：2026-10-02
 
 ## 目标
 
@@ -39,7 +39,7 @@
 
 测试机：4 vCPU Xeon E5-2696 v4 虚拟机（AVX2），同时有一个常驻进程占满约一个核，没有显卡。这台机器明显慢于普通台式机和笔记本，数据只能作为下限参考。
 
-llama.cpp b10964（从源码编译，CPU），Hy-MT2-1.8B Q4_K_M（SHA-256 与 `provenance.json` 一致）。
+llama.cpp b10964（从源码编译，CPU），Hy-MT2-1.8B Q4_K_M（SHA-256 与 `src/core/OfflineResourceCatalog.cpp` 中固定的一致）。
 
 | 项目 | 结果 |
 | --- | --- |
@@ -70,13 +70,16 @@ OCR (0.2–0.5 s) + 170 / prefill速度 + 75 / decode速度（串行时）+ 回�
 
 ## 验证
 
-- `visnip_local_translation_tests`：纯逻辑规则 13 项，外加通过测试替身 `visnip_fake_llama_server` 的端到端测试 6 项，覆盖进程启动、令牌鉴权、并发、重试、保留名、校验失败、缓存、取消、空闲释放和自检。
-- 真实模型验收（默认跳过）：`VISNIP_LITE_REAL_ROOT=<含 llama/ 和 models/ 的目录> visnip_local_translation_tests realModelWhenProvided`。
-- `tst_offline_resources`、`tst_translation_modes` 已改为两档设置的断言。它们依赖 Windows 专用的 OCR 和截图代码，需要在 Windows 上构建运行。
+- `visnip_local_translation_tests`：
+  - 纯逻辑规则 13 项。
+  - 6 项端到端测试，通过测试替身 `visnip_fake_llama_server` 运行，覆盖进程启动、令牌鉴权、并发、重试、保留名、校验失败、缓存、取消、空闲释放和自检。
+- `visnip_offline_resource_tests`：官方资源的下载、校验、换源和首选项流程（见 `docs/offline-resource-manager.md`）。
+- 以上测试在每次推送时由 GitHub Actions 在 Windows 上构建并运行。
+- 真实模型验收默认跳过，需要时运行：`VISNIP_LITE_REAL_ROOT=<含 llama/ 和 models/ 的目录> visnip_local_translation_tests realModelWhenProvided`。
 
 ## 尚未完成
 
-- Windows 上的完整构建、界面和截图翻译还没有实机验证（本次只在 Linux 上编译检查，Windows 专用代码用 mingw 做了语法检查）。显卡路径还没有在真实显卡上验证。
+- 显卡路径（`engine-runtime` 里的 Vulkan / CUDA 构建）还没有在真实显卡上做系统验证。
 - 逐段渐进显示（先译完的段先回填）还没有实现。
-- 0.4.1 起不再使用服务端打包的基础包：llama.cpp 和模型都直接从官方渠道下载。
 - 空间不足而保留原文的段，还没有接入精细档那样的译文面板。
+- 上表"换算到其他机器"的估算还需要更多真实机器的 `prefill_tps` / `decode_tps` 数据核对。

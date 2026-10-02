@@ -416,6 +416,15 @@ QString settingsStyleSheet()
             color: #7A8494;
             font-size: 11px;
         }
+        QLabel#VisnipSettingsUpdateStatus { color: #182230; font-size: 13px; font-weight: 500; }
+        QLabel#VisnipSettingsUpdateProblem { color: #B54708; font-size: 11px; }
+        QFrame#VisnipSettingsUpdateCard {
+            background: #F7F8FA;
+            border: 1px solid #E9EDF3;
+            border-radius: 8px;
+        }
+        QLabel#VisnipSettingsUpdateNotesTitle { color: #344054; font-size: 11px; font-weight: 650; }
+        QLabel#VisnipSettingsUpdateNotes { color: #475467; font-size: 12px; }
         QWidget#SettingsRow { background: transparent; min-height: 52px; }
         QFrame#SettingsDivider {
             color: #E9EDF3;
@@ -2455,21 +2464,31 @@ QWidget* SettingsDialog::createAboutPage()
                                 QStringLiteral("SettingsRowTitle")));
 
     addSectionTitle(layout, QStringLiteral("更新"));
-    auto* updateStatus = hint(QString());
+    auto* updateStatus = new QLabel;
     updateStatus->setObjectName(QStringLiteral("VisnipSettingsUpdateStatus"));
     updateStatus->setWordWrap(true);
     updateStatus->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(updateStatus);
-    auto* updateProblem = hint(QString());
+    auto* updateProblem = new QLabel;
     updateProblem->setObjectName(QStringLiteral("VisnipSettingsUpdateProblem"));
     updateProblem->setWordWrap(true);
     layout->addWidget(updateProblem);
+    auto* updateCard = new QFrame;
+    updateCard->setObjectName(QStringLiteral("VisnipSettingsUpdateCard"));
+    auto* cardLayout = new QVBoxLayout(updateCard);
+    cardLayout->setContentsMargins(14, 10, 14, 12);
+    cardLayout->setSpacing(4);
+    auto* notesTitle = new QLabel(QStringLiteral("更新内容"));
+    notesTitle->setObjectName(QStringLiteral("VisnipSettingsUpdateNotesTitle"));
+    cardLayout->addWidget(notesTitle);
     auto* updateNotes = new QLabel;
     updateNotes->setObjectName(QStringLiteral("VisnipSettingsUpdateNotes"));
     updateNotes->setWordWrap(true);
     updateNotes->setTextFormat(Qt::PlainText);
     updateNotes->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    layout->addWidget(updateNotes);
+    cardLayout->addWidget(updateNotes);
+    layout->addSpacing(4);
+    layout->addWidget(updateCard);
     auto* updateProgress = new QProgressBar;
     updateProgress->setObjectName(QStringLiteral("VisnipSettingsUpdateProgress"));
     updateProgress->setRange(0, 1000);
@@ -2477,6 +2496,7 @@ QWidget* SettingsDialog::createAboutPage()
     updateProgress->hide();
     layout->addWidget(updateProgress);
     auto* updateActions = new QHBoxLayout;
+    updateActions->setSpacing(8);
     auto* checkUpdate = new QPushButton(QStringLiteral("检查更新"));
     checkUpdate->setObjectName(QStringLiteral("VisnipSettingsCheckUpdate"));
     auto* installUpdate = new QPushButton;
@@ -2488,13 +2508,15 @@ QWidget* SettingsDialog::createAboutPage()
         button->setAutoDefault(false);
         updateActions->addWidget(button);
     }
+    updateActions->addStretch();
     auto* releaseLink = new QLabel;
     releaseLink->setObjectName(QStringLiteral("VisnipSettingsUpdateLink"));
     releaseLink->setOpenExternalLinks(true);
     releaseLink->setTextFormat(Qt::RichText);
     updateActions->addWidget(releaseLink);
-    updateActions->addStretch();
+    layout->addSpacing(4);
     layout->addLayout(updateActions);
+    layout->addSpacing(8);
 
     auto* autoCheck = makeSwitch(config_->settings().checkUpdates, QStringLiteral("自动检查更新"));
     autoCheck->setObjectName(QStringLiteral("VisnipSettingsAutoCheckUpdates"));
@@ -2507,7 +2529,7 @@ QWidget* SettingsDialog::createAboutPage()
                   QStringLiteral("打开首选项时向 GitHub 查询新版本，只是一次普通的网页请求，不上传任何数据"),
                   autoCheck, false);
 
-    const auto refreshUpdate = [this, updateStatus, updateProblem, updateNotes, updateProgress,
+    const auto refreshUpdate = [this, updateStatus, updateProblem, updateCard, updateNotes, updateProgress,
                                 checkUpdate, installUpdate, cancelUpdate, releaseLink]() {
         const auto state = updates_->state();
         const auto& release = updates_->release();
@@ -2526,13 +2548,17 @@ QWidget* SettingsDialog::createAboutPage()
             for (QString line : release.notes.split(QLatin1Char('\n'))) {
                 line = line.trimmed();
                 while (line.startsWith(QLatin1Char('#'))) line.remove(0, 1);
-                notes += line.replace(QStringLiteral("**"), QString()).trimmed() + QLatin1Char('\n');
+                line = line.replace(QStringLiteral("**"), QString()).trimmed();
+                if (line.startsWith(QStringLiteral("- "))) line = QStringLiteral("· ") + line.mid(2);
+                // The heading that only repeats the version adds nothing.
+                if (line.isEmpty() || line == release.version.toString() || line == QStringLiteral("Visnip ") + release.version.toString()) continue;
+                notes += line + QLatin1Char('\n');
             }
             notes = notes.trimmed();
             if (notes.size() > 700) notes = notes.left(700) + QStringLiteral("…");
         }
         updateNotes->setText(notes);
-        updateNotes->setVisible(!notes.isEmpty());
+        updateCard->setVisible(!notes.isEmpty());
         updateProgress->setVisible(state == UpdateService::State::Downloading);
         installUpdate->setText(busy ? QStringLiteral("正在更新…")
             : QStringLiteral("立即更新到 %1").arg(release.version.toString()));

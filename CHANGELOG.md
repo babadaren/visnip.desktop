@@ -2,6 +2,16 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
+## 0.4.2
+
+### Offline resource management
+
+- Preferences now list the installed resources: each file's name, size and whether it is present，plus "打开文件目录"（open the folder）and "删除已下载资源"（delete the download）. Deleting stops a resident translation engine first - the reason deletion used to fail with "文件可能正在使用" - removes the files, the enable receipt and the cached archives, and keeps nothing enabled until a fresh download.
+- "导入已有离线资源"（import an existing folder）is gone. The resources are app-managed and always come from the publishers, so a hand-picked directory had nothing to add.
+- The download folder is selectable on the offline page（下载位置 → 选择文件夹… / 恢复默认）. It no longer has to live on the system drive; the free-space check follows the chosen volume, and installed resources keep working when the location changes.
+- A download that stalls is recovered without the user pausing it: the transfer is sampled every 20 seconds, fewer than 256 KiB in a window hands the file to the retry or fallback publisher, and the status line reports the rate of the last window. Bytes that arrive before the status line is parsed are buffered instead of blocking the read loop.
+- The download progress bar keeps its byte counter inside a 22 px bar instead of clipping it against a 6 px indicator, and the compact OCR indicator no longer draws a percentage it cannot show.
+
 ## 0.4.1
 
 ### Offline resources come from their publishers

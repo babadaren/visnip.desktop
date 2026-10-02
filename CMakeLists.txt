@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Visnip
-    VERSION 0.4.1
+    VERSION 0.4.2
     DESCRIPTION "Visnip lightweight screenshot and pin tool"
     LANGUAGES CXX
 )

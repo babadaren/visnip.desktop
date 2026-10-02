@@ -16,11 +16,11 @@ BEGIN
   BEGIN
    VALUE "CompanyName", "Visnip Project\0"
    VALUE "FileDescription", "Visnip screenshot and offline translation preview\0"
-   VALUE "FileVersion", "0.4.1\0"
+   VALUE "FileVersion", "0.4.2\0"
    VALUE "InternalName", "visnip\0"
    VALUE "OriginalFilename", "visnip.exe\0"
    VALUE "ProductName", "Visnip\0"
-   VALUE "ProductVersion", "0.4.1\0"
+   VALUE "ProductVersion", "0.4.2\0"
   END
  END
  BLOCK "VarFileInfo"

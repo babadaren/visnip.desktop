@@ -559,6 +559,19 @@ QString settingsStyleSheet()
             text-align: center;
         }
         QProgressBar::chunk { background: #3567E8; border-radius: 3px; }
+        /* The resource download paints its byte counter inside the bar, so it must
+           not inherit the 6 px height of the compact indicators above. The fill is
+           kept light because Qt draws that text in one colour across the whole bar. */
+        QProgressBar#VisnipSettingsOfflineProgress {
+            min-height: 22px;
+            max-height: 22px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+        QProgressBar#VisnipSettingsOfflineProgress::chunk {
+            background: #C3D6F9;
+            border-radius: 6px;
+        }
     )");
 }
 
@@ -1215,6 +1228,9 @@ QWidget* SettingsDialog::createTranslationPage()
     auto* ocrPackProgress = new QProgressBar;
     ocrPackProgress->setObjectName(QStringLiteral("VisnipSettingsOcrPackProgress"));
     ocrPackProgress->setRange(0, 1000);
+    // The status line above already names the state; a percentage inside a 6 px
+    // bar would be clipped, so this indicator stays textless.
+    ocrPackProgress->setTextVisible(false);
     ocrPackProgress->hide();
     auto* downloadOcrPack = new QPushButton(QStringLiteral("下载模型"));
     downloadOcrPack->setObjectName(QStringLiteral("VisnipSettingsOcrPackDownloadButton"));

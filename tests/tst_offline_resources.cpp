@@ -398,11 +398,15 @@ private slots:
         emit manager->phaseChanged(QStringLiteral("download"));emit manager->progress(5242880,10485760);
         QVERIFY(bar->isVisible());QCOMPARE(bar->value(),500);QCOMPARE(bar->maximum(),1000);
         QVERIFY(bar->width()>300);
+        // The byte counter is painted inside the bar: a slim indicator clips it.
+        QVERIFY(bar->isTextVisible());
+        QVERIFY(bar->text().contains(QStringLiteral("MiB")));
+        QVERIFY2(bar->height()>=16,qPrintable(QStringLiteral("download progress text needs a taller bar, got %1 px").arg(bar->height())));
+        const auto output=qEnvironmentVariable("VISNIP_SETTINGS_QA_IMAGE");if(!output.isEmpty()) QVERIFY(dialog.grab().save(output));
         emit manager->phaseChanged(QStringLiteral("verify"));emit manager->progress(0,0);
         QVERIFY(!bar->isVisible());QCOMPARE(bar->maximum(),1000);
         emit manager->phaseChanged(QStringLiteral("install"));QVERIFY(!bar->isVisible());
         emit manager->phaseChanged(QStringLiteral("selftest"));QVERIFY(!bar->isVisible());
-        const auto output=qEnvironmentVariable("VISNIP_SETTINGS_QA_IMAGE");if(!output.isEmpty()) QVERIFY(dialog.grab().save(output));
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
     }
     void rateLimitPageNeverBecomesPackageBytes() {

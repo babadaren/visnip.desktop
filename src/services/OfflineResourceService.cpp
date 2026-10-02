@@ -24,6 +24,9 @@ namespace {
 constexpr qint64 reserveBytes = 1024LL * 1024 * 1024;
 constexpr int kMaxRetriesPerSource = 3;
 constexpr int kExtractTimeoutMs = 3 * 60 * 1000;
+// The network transfer timeout is 90 s; this fires earlier and hands the file
+// to the retry or fallback source instead of leaving the page stuck.
+constexpr int kStallTimeoutMs = 40 * 1000;
 const QString kReceipt = QStringLiteral("vislate-managed.json");
 class ResourceProxyFactory final : public QNetworkProxyFactory {
 public:
@@ -93,6 +96,13 @@ OfflineResourceService::OfflineResourceService(QObject* parent) : QObject(parent
     extractTimeout_.setSingleShot(true);
     connect(&extractTimeout_, &QTimer::timeout, this, [this]() {
         if (busy_ && extractor_) fail(QStringLiteral("解压 llama.cpp 超时，已停止，没有启用。"));
+    });
+    stallTimeout_.setSingleShot(true);
+    stallTimeout_.setInterval(kStallTimeoutMs);
+    connect(&stallTimeout_, &QTimer::timeout, this, [this]() {
+        if (!busy_ || !reply_) return;
+        status(QStringLiteral("下载停顿超过 %1 秒，正在重试或切换下载源…").arg(kStallTimeoutMs / 1000));
+        reply_->abort(); // finished() decides between a retry and the next source
     });
     connect(liteTest_, &LocalTextTranslationService::phaseChanged, this, [this](const QString& phase) {
         if (busy_) status(QStringLiteral("离线自检：%1").arg(phase));
@@ -182,6 +192,8 @@ void OfflineResourceService::status(const QString& text) { status_ = text; emit 
 void OfflineResourceService::reject(const QString& message) { status(message); emit failed(message); }
 void OfflineResourceService::releaseReply()
 {
+    stallTimeout_.stop();
+    pendingHead_.clear();
     if (!reply_) return;
     QNetworkReply* reply = reply_.data(); reply_.clear();
     disconnect(reply, nullptr, this, nullptr); reply->abort(); reply->deleteLater();
@@ -345,6 +357,8 @@ void OfflineResourceService::requestFile()
     emit phaseChanged(QStringLiteral("download"));
     emit progress(completedBytes_ + offset_, totalBytes_);
     reply_ = network_->get(request); reply_->setReadBufferSize(1024 * 1024);
+    pendingHead_.clear();
+    stallTimeout_.start();
     connect(reply_, &QNetworkReply::redirected, this, [this](const QUrl& target) {
         if (!reply_) return;
         if (OfflineResourceCatalog::isAllowedDownload(target)) { emit reply_->redirectAllowed(); return; }
@@ -356,12 +370,18 @@ void OfflineResourceService::requestFile()
 void OfflineResourceService::readFile()
 {
     if (!reply_ || !busy_ || redirectRejected_ || badResponse_) return;
+    stallTimeout_.start(); // any delivered byte means the transfer is alive
     const qint64 size = plan_[index_].size;
     if (!headersChecked_) {
         const int http = reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (http == 0) return;
+        if (http == 0) {
+            // The status line is not parsed yet. Hold those bytes here instead of
+            // leaving them in a full read buffer, which stops readyRead for good.
+            if (reply_->bytesAvailable() > 0) pendingHead_ += reply_->readAll();
+            return;
+        }
         if (transientHttp(http)) {
-            reply_->readAll(); return; // Retry without saving a server error page into the file.
+            reply_->readAll(); pendingHead_.clear(); return; // Never save an error page into the file.
         }
         if (http == 200 && offset_ > 0) {
             // This source ignored the range; start the file again from its beginning.
@@ -376,6 +396,14 @@ void OfflineResourceService::readFile()
             badResponse_ = true; reply_->abort(); return;
         }
         headersChecked_ = true;
+        if (!pendingHead_.isEmpty()) {
+            const QByteArray head = pendingHead_; pendingHead_.clear();
+            if (output_.pos() + head.size() > size) {
+                output_.close(); QFile::remove(filePath(true));
+                fail(QStringLiteral("下载内容超过官方文件的大小，已拒绝。")); return;
+            }
+            if (output_.write(head) != head.size()) { fail(QStringLiteral("写入资源失败，请检查磁盘空间。")); return; }
+        }
     }
     while (reply_ && reply_->bytesAvailable() > 0) {
         const QByteArray part = reply_->read(512 * 1024);

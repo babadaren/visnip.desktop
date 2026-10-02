@@ -1,5 +1,6 @@
 #pragma once
 #include "core/OfflineResourceCatalog.h"
+#include <QByteArray>
 #include <QFile>
 #include <QLockFile>
 #include <QObject>
@@ -73,6 +74,10 @@ private:
     LocalTextTranslationService* liteTest_ = nullptr;
     QPointer<QProcess> extractor_;
     QTimer extractTimeout_;
+    // Aborts an attempt that stops delivering bytes so the next source or retry
+    // takes over without the user having to pause and restart by hand.
+    QTimer stallTimeout_;
+    QByteArray pendingHead_;
     std::unique_ptr<QLockFile> lock_;
     QFile output_;
     QVector<OfflineResourceFile> plan_;

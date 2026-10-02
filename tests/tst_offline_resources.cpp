@@ -76,6 +76,31 @@ protected:
         return new FixtureReply(request, data, status, contentRange, failure, this);
     }
 };
+// A source that accepts the request and then goes silent, like a CDN that
+// keeps the connection open without ever sending the body.
+class SilentReply final : public QNetworkReply {
+public:
+    SilentReply(const QNetworkRequest& request, QObject* parent) : QNetworkReply(parent) {
+        setRequest(request); setUrl(request.url()); open(QIODevice::ReadOnly | QIODevice::Unbuffered);
+    }
+    void abort() override {
+        setError(QNetworkReply::OperationCanceledError, QStringLiteral("stalled"));
+        setFinished(true);
+        QTimer::singleShot(0, this, [this]() { emit finished(); });
+    }
+    qint64 bytesAvailable() const override { return QNetworkReply::bytesAvailable(); }
+protected:
+    qint64 readData(char*, qint64) override { return -1; }
+};
+class SilentNetwork final : public QNetworkAccessManager {
+public:
+    int calls = 0;
+protected:
+    QNetworkReply* createRequest(Operation, const QNetworkRequest& request, QIODevice*) override {
+        ++calls;
+        return new SilentReply(request, this);
+    }
+};
 OfflineResourceFile fixtureFile(const QStringList& sources)
 {
     OfflineResourceFile file;
@@ -515,6 +540,32 @@ private slots:
         QVERIFY(!QFileInfo::exists(busyModel));
 #endif
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
+    }
+    void silentSourceFailsOverInsteadOfHanging() {
+        QTemporaryDir temp; QVERIFY(temp.isValid());
+        OfflineResourceService service;
+        auto* network = new SilentNetwork;
+        network->setParent(&service);
+        delete service.network_;
+        service.network_ = network;
+        service.busy_ = true;
+        service.cacheRoot_ = temp.path();
+        service.plan_ = OfflineResourceCatalog::liteFiles();
+        service.index_ = 0; service.source_ = 0;
+        service.stallTimeout_.setInterval(150); // keep the test quick
+        QSignalSpy failed(&service, &OfflineResourceService::failed);
+        QSignalSpy status(&service, &OfflineResourceService::statusChanged);
+        service.requestFile();
+        QTRY_VERIFY_WITH_TIMEOUT(!failed.isEmpty(), 15000);
+        bool reportedStall = false;
+        for (const auto& arguments : status)
+            if (arguments.at(0).toString().contains(QStringLiteral("下载停顿"))) reportedStall = true;
+        QVERIFY2(reportedStall, "the stall watchdog never reported the silent source");
+        const QString error = failed.first().at(0).toString();
+        QVERIFY2(!error.contains(QStringLiteral("磁盘")), qPrintable(error));
+        QVERIFY2(error.contains(QStringLiteral("无法完成下载")), qPrintable(error));
+        QCOMPARE(network->calls, 1);
+        QVERIFY(QFileInfo(service.filePath(true)).exists()); // the partial file stays for the next attempt
     }
     void rateLimitPageNeverBecomesPackageBytes() {
         QTemporaryDir temp;QVERIFY(temp.isValid());OfflineResourceService service;

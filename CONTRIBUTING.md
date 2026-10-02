@@ -47,6 +47,13 @@ scripts\smoke-debug.cmd
 
 每次推送和 Pull Request 都会在 GitHub Actions 上构建并运行全部测试，`VISNIP_ONLINE_TRANSLATION` 为 `OFF` 和 `ON` 各一套。合并前 CI 必须全部通过。
 
+### 本地打包与排查
+
+- **打包 Release 版**：
+  - 运行 `scripts\package-release.cmd`，会生成可以直接运行的 `dist\Visnip\visnip.exe`，并用 `windeployqt` 带上 Qt 和 MinGW 运行库。不要只复制单个 `visnip.exe` 给别人。
+  - 也可以用 `scripts\package-release.ps1 -BuildDir <构建目录> -Version <版本>`。它和 GitHub Actions 发布用的是同一个脚本，会生成带许可证和 `package-files.txt` 的 zip，并对打包结果运行 `--self-test`。
+- **排查翻译回填问题**：设置环境变量 `VISNIP_SAVE_TRANSLATION_IMAGES=1` 后，会在本机保存翻译诊断图片。默认不保存，诊断图片也不会上传。
+
 ## 必须遵守的原则
 
 - **不悄悄联网**：截图、标注和贴图从不联网。新增的任何网络访问都必须由用户明确的操作触发，并在 README 的「隐私」一节写清楚发给谁、发了什么。离线翻译失败时不能自动改用在线服务。

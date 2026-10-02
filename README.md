@@ -1,160 +1,85 @@
-# Visnip Desktop
+<p align="center">
+  <img src="docs/assets/app/visnip-app-icon-white.svg" alt="Visnip" width="88" height="88">
+</p>
 
-Visnip（0.4.0 之前名为 Vislate）是一个 Windows-first 的轻量截图与贴图工具。当前实现按 `docs/` 中的 v0.3 Compact 设计推进：30px 小巧工具栏、16 个高频按钮、截图/标注/复制/保存/贴图闭环。
+<h1 align="center">Visnip</h1>
 
-## 技术栈
+<p align="center">开源免费的 Windows 截图工具：截图、标注、贴图，一条工具栏搞定。</p>
 
-- C++20
-- Qt 6 Widgets + QPainter + Qt SVG
-- Windows 全局快捷键：Win32 `RegisterHotKey`
-- 截图：Win32 GDI 快速路径 + Qt `QScreen::grabWindow(0)` 多屏/高 DPI 回退
-- 构建：CMake + Ninja + MinGW
+<p align="center">
+  <a href="https://visnip.com">官网</a> ·
+  <a href="https://github.com/babadaren/Visnip.desktop/releases/latest">下载</a> ·
+  <a href="CHANGELOG.md">更新日志</a>
+</p>
 
-## 主要功能
+## 功能
 
-- 托盘常驻，右键菜单包含截图、贴图、重复上次区域、设置、退出。
-- 全局快捷键：`F1` 截图、`F3` 从剪贴板贴图、`Ctrl+F1` 重复上次区域、`Shift+F3` 隐藏/显示贴图、`Ctrl+T` 当前贴图穿透。
-- 截图覆盖层：多屏、遮罩、选区、尺寸标签、取色标签、放大镜、长截图。
-- Compact 工具栏：矩形、箭头、画笔、文字、马赛克、橡皮、序号、长截图、撤销、重做、贴图、保存、复制、翻译、解题、关闭。
-- 解题面板：工具栏点「题」后遮罩关闭，屏幕侧边出现常驻面板并记住选区；点击「获取答案」或按 `F4`（仅面板打开时注册）截取选区当前画面，发送给首选项中配置的多模态大模型（OpenAI 兼容或 Anthropic 格式），流式显示答案。设计见 `docs/question-panel-design.md`。
-- 贴图窗口：置顶、拖拽、滚轮缩放、`Ctrl+滚轮` 透明度、右键复制/保存/穿透/关闭。
-- 设置窗口：常规、界面、截图、贴图、输出、翻译、解题、快捷键、关于。
+- **截图**：按 `F1` 框选，支持多屏和高 DPI。尺寸标签、放大镜和 RGB / HEX 取色帮你对准像素，`Ctrl+F1` 重复上次区域。
+- **标注**：矩形、箭头、画笔、文字、序号、马赛克与模糊、橡皮擦，可以撤销和重做，画完直接复制或保存。
+- **长截图**：在选区里滚动页面，内容实时拼成一张长图；滚过头往回滚，还能向上补拼。
+- **贴图**：截图一键置顶到桌面，可拖动、滚轮缩放、`Ctrl+滚轮` 调透明度、鼠标穿透；`F3` 直接贴出剪贴板里的图片。
+- **原位翻译**：在本机识别并翻译选区里的文字，译文回到原来的位置，再点一次切回原图。全程离线，不需要显卡，目前支持中英互译。
+- **AI 解题**：截下题目或报错，发给你自己配置的多模态模型（OpenAI 兼容或 Anthropic 格式），答案在屏幕侧边逐字显示。
+- **一键更新**：有新版本时，在「首选项 → 关于」中点「立即更新」即可。
 
-## 下载
+## 下载与使用
 
-在 [Releases](../../releases) 下载 `Visnip-<版本>-windows-x64.zip`，解压后运行 `visnip.exe`，并用同名 `.sha256` 文件核对下载完整性。安装包目前还没有代码签名，首次运行时 Windows SmartScreen 可能会提示。本机离线翻译资源不在压缩包中，需要时在「首选项 → 翻译 → 本机离线」中下载。版本变化见 [CHANGELOG.md](CHANGELOG.md)。
+支持 Windows 10 / 11 64 位。在 [Releases](https://github.com/babadaren/Visnip.desktop/releases/latest) 下载 `Visnip-<版本>-windows-x64.zip`，解压后运行 `visnip.exe`，不需要安装，程序会常驻在托盘。可以用同名的 `.sha256` 文件核对下载是否完整。
 
-### 更新
+- **SmartScreen 提示**：安装包还没有代码签名，Windows 可能拦截。确认文件来自本仓库的 Releases 后，点「更多信息 → 仍要运行」。
+- **离线翻译资源**：首次使用翻译时，在「首选项 → 翻译」中下载约 1.1 GB 官方资源。llama.cpp 来自 GitHub，腾讯 Hy-MT2 翻译模型来自魔搭社区（不可用时改用 Hugging Face），下载后逐个核对 SHA-256。翻译引擎需要 Microsoft Visual C++ 运行库，缺少时客户端会提示安装。
+- **更新**：设置、离线资源和截图都会保留。如果程序放在没有写入权限的位置（例如 Program Files），需要手动下载新版本替换。
 
-0.4.3 起，打开首选项时会向 GitHub 查询是否有新版本。有新版本时，左侧「关于」显示“有新版本”，在「关于 → 更新」点击“立即更新”即可完成更新：
+默认快捷键（都可以在首选项中修改）：
 
-1. 客户端从本仓库的 GitHub Releases 下载安装包，核对 SHA-256。
-2. 先在临时目录确认新版本能在这台电脑上启动。
-3. 关闭当前程序，由新版本替换安装目录里的文件，然后自动重新打开。
-
-设置、离线资源、截图和 `logs/` 都会保留；中途失败会恢复原来的版本。只替换安装包清单（`package-files.txt`）里列出的文件。安装在没有写入权限的位置（例如 Program Files）时，需要手动下载替换。自动检查可以在「关于」中关闭。0.4.2 及更早的版本还没有更新功能，需要手动下载一次 0.4.3。
-
-构建选项 `VISNIP_UPDATE_REPOSITORY`（默认 `babadaren/Visnip.desktop`）指定查询的仓库；fork 改成自己的仓库，留空则不检查更新。
-
-## 构建
-
-安装或确认以下工具：
-
-- Qt 6.4.2 MinGW：`C:/Qt/6.4.2/mingw_64`
-- MinGW：`C:/ProgramData/mingw64/mingw64/bin`
-- CMake + Ninja
-
-以上是 `CMakePresets.json` 与 `scripts\*.cmd` 使用的默认路径。工具装在别处时，在仓库根目录新建 `CMakeUserPresets.json`（已被 Git 忽略）覆盖 `CMAKE_PREFIX_PATH` 和编译器路径即可。
-
-本地 OCR 需要的 ONNX Runtime 与 PP-OCR 模型不在仓库中，首次构建前运行一次：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\fetch_ocr_assets.ps1
-```
-
-```bat
-scripts\configure-debug.cmd
-scripts\build-debug.cmd
-scripts\test-debug.cmd
-scripts\smoke-debug.cmd
-```
-
-### 构建选项
-
-| CMake 选项 | 默认值 | 作用 |
-| --- | --- | --- |
-| `VISNIP_ONLINE_TRANSLATION` | `OFF` | `ON` 时加入云端、内网和旧版混合翻译模式。发布版保持 `OFF`。 |
-| `VISNIP_DEFAULT_SERVICE_URL` | 空 | 联网模式下云端服务的默认根地址；为空时由用户在首选项中填写。 |
-
-例如：`cmake --preset windows-mingw-debug -DVISNIP_ONLINE_TRANSLATION=ON -DVISNIP_DEFAULT_SERVICE_URL=https://translate.example.com`
-
-Release 验证：
-
-```bat
-scripts\configure-release.cmd
-scripts\build-release.cmd
-scripts\test-release.cmd
-scripts\smoke-release.cmd
-```
-
-生成可直接双击运行的发布目录：
-
-```bat
-scripts\package-release.cmd
-dist\Visnip\visnip.exe
-```
-
-也可以用 `scripts\package-release.ps1 -BuildDir <构建目录> -Version <版本>` 打包。它会生成带许可证文件的发布目录和 zip，并对打包结果运行 `--self-test`；GitHub Actions 发布时用的就是这个脚本。
-
-不要直接复制 `build\windows-mingw-release\visnip.exe` 单文件给别人使用；Qt 程序需要同时携带 Qt6Core、Qt6Gui、Qt6Widgets、Qt6Svg、platforms/qwindows.dll 和 MinGW 运行时等依赖。`package-release.cmd` 会自动关闭正在运行的 Visnip，再调用 `windeployqt` 部署这些文件。
-
-也可以直接运行：
-
-```bat
-set PATH=C:\ProgramData\chocolatey\bin;C:\ProgramData\mingw64\mingw64\bin;C:\Qt\6.4.2\mingw_64\bin;%PATH%
-cmake --preset windows-mingw-debug
-cmake --build --preset debug
-ctest --preset debug
-```
-
-## 运行
-
-### 翻译处理模式
-
-开源发布版**只提供本机离线翻译**：不包含云端翻译、内网服务器和旧版混合（联网）模式，源码中也没有任何翻译服务地址。旧版本保存的联网模式设置在启动时改为本机离线。
-
-联网模式的代码仍保留，只在自行构建时开启（见下文「构建选项」）。开启后，切换到会上传内容的模式前必须先确认上传说明；云端与内网地址、API 令牌分别保存，令牌以 `Authorization: Bearer` 发送，云端令牌只走 HTTPS（本机回环地址除外），在 Windows 上用 DPAPI 加密保存。
-
-离线资源在首选项中准备：**翻译 → 本机离线 → 下载并启用**。资源直接从官方渠道下载，Visnip 不托管任何资源文件：llama.cpp b10964 来自 GitHub，腾讯 Hy-MT2-1.8B 模型来自魔搭社区（ModelScope），不可用时改用 Hugging Face。下载地址和 SHA-256 固定写在源码里。用户确认后客户端会依次下载、逐个核对哈希、解压，并运行真实模型自检；自检通过后才保存资源路径并启用。下载支持暂停和续传。llama.cpp 的官方构建需要 Microsoft Visual C++ 2015-2022 运行库；缺少时客户端会在下载前提示安装。
-
-本机离线分两档：
-
-- **轻量（默认）**：C++ 本机 OCR → 本地 `llama-server`（Hy-MT2-1.8B Q4_K_M，仅监听 127.0.0.1，每次启动随机令牌）→ 客户端内原位回填。不需要 Python、PyTorch 或显卡，下载约 1.1 GiB。换行的正文按段落翻译再按原行宽拆回各行；按本机实测速度自动选择 1、2 或 4 路并发。截图（F1）时预热模型，空闲 10 分钟释放。设计与实测见 `docs/offline-lite-tier.md`。
-- **精细**：Python 整图引擎，额外用 Hi-SAM 分割笔画、LaMa 修复复杂背景，需要约 6 GiB 资源，建议有独立显卡。它的资源没有官方整包，0.4.1 起不再提供下载；以前装好的精细资源仍可使用。精细档的 Python 推理引擎在未开源的服务端仓库中维护，本仓库 `resources/offline/` 里只有同步过来的客户端副本，单独无法运行。
-
-离线推理不上传截图或文字，也不会自动回退在线服务。普通截图、标注和贴图不需要加载模型。两档目前都只开放中英互译。Windows 发布者代码签名仍待配置。详情见 `docs/offline-resource-manager.md`。
-
-各处理方式的数据边界、引擎设计原则和验收要求见 `docs/translation-engine-architecture.md`。
-
-```bat
-set PATH=C:\ProgramData\mingw64\mingw64\bin;C:\Qt\6.4.2\mingw_64\bin;%PATH%
-build\windows-mingw-debug\visnip.exe
-```
-
-非交互 smoke test：
-
-```bat
-scripts\smoke-debug.cmd
-```
+| 快捷键 | 作用 |
+| --- | --- |
+| `F1` | 截图 |
+| `Ctrl+F1` | 重复上次区域 |
+| `F3` | 把剪贴板图片贴到桌面 |
+| `Shift+F3` | 隐藏 / 显示所有贴图 |
+| `Ctrl+T` | 当前贴图鼠标穿透 |
+| `F4` | 解题面板打开时获取答案 |
 
 ## 隐私
 
-- **翻译不上传**：发布版只做本机离线翻译，截图和文字只在本机处理；截图、标注、贴图从不联网。
-- **自行开启联网模式时**：切换到云端、内网或混合模式前，客户端先说明会把什么发给谁，同意后才启用；未确认时不发送，也不预先建立连接。百度翻译失败时直接报错，不会改发给其他服务；内网地址为空时也不回退到云端。
-- **检查更新**：打开首选项时向 `api.github.com` 查询最新版本，只是一次普通的 HTTPS 请求，不附带任何个人数据；可在「关于」中关闭。下载更新只在你点击“立即更新”后进行。
-- **资源下载**：离线资源只在你确认后，从 GitHub、魔搭社区或 Hugging Face 下载；这些网站会像普通下载一样收到你的 IP 等访问信息。Visnip 的服务器不参与，也不上传截图或文字。
-- **密钥**：API 令牌、百度密钥、解题模型 Key 在 Windows 上用 DPAPI 按当前用户加密保存。
-- **日志**：程序目录下的 `logs/` 记录耗时、尺寸、状态和服务地址等运行信息，不写入截图中的文字。只有设置环境变量 `VISNIP_SAVE_TRANSLATION_IMAGES=1` 时才会在本机保存翻译诊断图片，用于排查问题。
-- **解题面板**：只在你点击「获取答案」时，把选区画面发送给你在首选项中配置的模型接口。
+- **截图、标注、贴图从不联网。**
+- **翻译只在本机完成**：截图和文字都不上传，翻译失败也不会改用在线服务。
+- **只有下面三种情况会联网**，都由你触发，或者可以关闭：
+  - **下载离线资源**：你确认后，从 GitHub、魔搭社区或 Hugging Face 下载。
+  - **AI 解题**：点击「获取答案」时，把选区画面发给你在首选项中配置的模型接口，没有中转服务器。
+  - **检查更新**：打开首选项时向 GitHub 查询最新版本，不附带个人数据，可以在「关于」中关闭；点击「立即更新」才会下载。
+- **不收集使用数据**，也不需要注册登录。
+- **密钥加密保存**：解题模型的 API Key 在 Windows 上按当前用户加密（DPAPI）保存。
+- **日志不含截图文字**：程序目录下的 `logs/` 只记录耗时、尺寸和状态，不写入截图里的文字。
 
-## 许可证
+## 从源码构建
 
-本项目以 [Apache License 2.0](LICENSE) 授权，版权声明见 [NOTICE](NOTICE)。第三方组件、模型和数据的来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，它们不因本仓库的许可而改变。
+技术栈是 C++20、Qt 6.4 Widgets 和 CMake。需要 Windows、Qt 6.4.2（MinGW 64-bit）、MinGW 11.2、CMake 3.25 以上和 Ninja。
 
-“Visnip”名称和图标不在 Apache License 的授权范围内。修改后再发布的版本请使用不同的名称和图标。
+```bat
+powershell -ExecutionPolicy Bypass -File scripts\fetch_ocr_assets.ps1
+scripts\configure-debug.cmd
+scripts\build-debug.cmd
+scripts\test-debug.cmd
+```
 
-安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
+工具路径、构建选项、打包方法和必须遵守的原则见 [CONTRIBUTING.md](CONTRIBUTING.md)。发布版只编译本机离线翻译；联网翻译模式需要在自行构建时开启，说明见 [docs/translation-engine-architecture.md](docs/translation-engine-architecture.md)。
+
+## 文档
+
+- [离线翻译（轻量档）的设计与实测](docs/offline-lite-tier.md)
+- [离线资源的下载与校验](docs/offline-resource-manager.md)
+- [截图翻译的处理方式与数据边界](docs/translation-engine-architecture.md)
+- [解题面板设计](docs/question-panel-design.md)
+- [界面设计规范](docs/README.md)
 
 ## 参与贡献
 
-欢迎提交问题和改进。开发环境、构建测试方法和必须遵守的原则（不悄悄联网、第三方文件来自官方渠道等）见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎提交问题和改进，开始前请先读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
-## 持续集成与发布
+## 许可证
 
-- 每次推送分支或提交 Pull Request，GitHub Actions 都会在 Windows 上用 Qt 6.4.2 和 MinGW 11.2 构建，分别在关闭和开启联网翻译时运行全部测试和 `--self-test`（见 `.github/workflows/ci.yml`）。
-- 推送 `v<版本>` 标签时，会先检查标签与 `CMakeLists.txt` 中的版本一致，再构建只含本机离线翻译的版本、测试、打包，并以 `CHANGELOG.md` 中对应的段落作为说明，直接正式发布并标记为最新版本。官网的下载按钮和客户端的更新检查都读取 GitHub 的 `releases/latest`（见 `.github/workflows/release.yml`）。
-- 发布新版本时要同时修改 `CMakeLists.txt` 与 `resources/visnip.rc` 中的版本号，并在 `CHANGELOG.md` 里添加该版本的段落。
+本项目以 [Apache License 2.0](LICENSE) 授权，版权声明见 [NOTICE](NOTICE)。第三方组件、模型和数据的来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-## 设计资料
-
-完整设计包位于 `docs/`，其中 `docs/docs/Visnip_轻量截图贴图工具_设计说明书_v0.3_compact.md` 是当前开发口径。正式实现优先遵循 `docs/dev/design_tokens.json` 与 `docs/dev/toolbar_spec.json`。
+"Visnip"名称和图标不在 Apache License 的授权范围内，修改后再发布的版本请使用不同的名称和图标。

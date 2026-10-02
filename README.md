@@ -148,7 +148,7 @@ scripts\smoke-debug.cmd
 ## 持续集成与发布
 
 - 每次推送分支或提交 Pull Request，GitHub Actions 都会在 Windows 上用 Qt 6.4.2 和 MinGW 11.2 构建，分别在关闭和开启联网翻译时运行全部测试和 `--self-test`（见 `.github/workflows/ci.yml`）。
-- 推送 `v<版本>` 标签时，会先检查标签与 `CMakeLists.txt` 中的版本一致，再构建只含本机离线翻译的版本、测试、打包，并以 `CHANGELOG.md` 中对应的段落作为说明，创建草稿发布。人工验证后再正式发布；官网的下载按钮指向 GitHub 的 `releases/latest`，它不包含草稿和预发布（见 `.github/workflows/release.yml`）。
+- 推送 `v<版本>` 标签时，会先检查标签与 `CMakeLists.txt` 中的版本一致，再构建只含本机离线翻译的版本、测试、打包，并以 `CHANGELOG.md` 中对应的段落作为说明，直接正式发布并标记为最新版本。官网的下载按钮和客户端的更新检查都读取 GitHub 的 `releases/latest`（见 `.github/workflows/release.yml`）。
 - 发布新版本时要同时修改 `CMakeLists.txt` 与 `resources/visnip.rc` 中的版本号，并在 `CHANGELOG.md` 里添加该版本的段落。
 
 ## 设计资料

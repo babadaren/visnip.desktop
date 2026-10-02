@@ -38,6 +38,9 @@ public:
     ~LocalTextTranslationService() override;
 
     static QString resourceProblem(const QString& root);
+    // The official llama.cpp Windows build needs the Visual C++ 2015-2022
+    // runtime, installed system-wide or placed beside llama-server.exe.
+    static QString runtimeProblem(const QString& root = QString());
     static QString serverExecutable(const QString& root);
     static QString modelFile(const QString& root);
     // Starts the shared server in the background when resources exist and the

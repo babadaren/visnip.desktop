@@ -838,17 +838,42 @@ QString LocalTextTranslationService::modelFile(const QString& root)
     return QDir(canonicalRoot(root)).filePath(kModelRelativePath);
 }
 
+QString LocalTextTranslationService::runtimeProblem(const QString& root)
+{
+#ifdef Q_OS_WIN
+    const QString beside = QFileInfo(serverExecutable(root)).absolutePath();
+    const QString system = QDir(qEnvironmentVariable("SystemRoot", QStringLiteral("C:/Windows")))
+        .filePath(QStringLiteral("System32"));
+    QStringList missing;
+    for (const QString& name : {QStringLiteral("msvcp140.dll"), QStringLiteral("vcruntime140.dll"),
+                                QStringLiteral("vcruntime140_1.dll")}) {
+        if (!QFileInfo(QDir(system).filePath(name)).isFile() && !QFileInfo(QDir(beside).filePath(name)).isFile()) {
+            missing.append(name);
+        }
+    }
+    if (!missing.isEmpty()) {
+        return QStringLiteral("这台电脑缺少 Microsoft Visual C++ 运行库（%1），本机翻译引擎无法启动。"
+                              "请安装微软官方的“Visual C++ 2015-2022 可再发行程序包（x64）”："
+                              "https://aka.ms/vs/17/release/vc_redist.x64.exe ，然后重新点击“下载并启用”。")
+            .arg(missing.join(QStringLiteral("、")));
+    }
+#else
+    Q_UNUSED(root);
+#endif
+    return {};
+}
+
 QString LocalTextTranslationService::resourceProblem(const QString& root)
 {
-    // The installer verified every file against the signed manifest; hashing
-    // the 1 GiB model again on each start would only add seconds of latency.
+    // Every file was checked against its pinned SHA-256 when it was installed;
+    // hashing the 1 GiB model again on each start would only add latency.
     for (const QString& relative : {kServerRelativePath, kModelRelativePath}) {
         const QFileInfo file(QDir(canonicalRoot(root)).filePath(relative));
         if (!file.isFile() || file.isSymLink()) {
             return QStringLiteral("轻量离线资源尚未就绪（缺少 %1），请在首选项中点击“下载并启用”。").arg(relative);
         }
     }
-    return {};
+    return runtimeProblem(root);
 }
 
 void LocalTextTranslationService::prewarm(const QString& root)

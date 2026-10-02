@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Visnip
-    VERSION 0.4.0
+    VERSION 0.4.1
     DESCRIPTION "Visnip lightweight screenshot and pin tool"
     LANGUAGES CXX
 )
@@ -44,7 +44,7 @@ set(VISNIP_CORE_SOURCES
     src/core/LongCaptureMatch.cpp
     src/core/OcrLanguagePack.cpp
     src/core/OcrPostProcess.cpp
-    src/core/OfflineResourceManifest.cpp
+    src/core/OfflineResourceCatalog.cpp
     src/core/OutputFilenamePattern.cpp
     src/core/PerfLog.cpp
     src/core/QuestionAnswer.cpp

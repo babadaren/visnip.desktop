@@ -1,4 +1,4 @@
-#include "core/OfflineResourceManifest.h"
+#include "core/OfflineResourceCatalog.h"
 #include "services/OfflineResourceService.h"
 #include "services/OfflineTranslationService.h"
 #include "services/ImageTranslationService.h"
@@ -15,6 +15,7 @@
 #include <QNetworkReply>
 #include <QNetworkProxyFactory>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -57,47 +58,32 @@ public:
     QByteArray data, contentRange;
     int status = 200, calls = 0;
     QNetworkReply::NetworkError failure = QNetworkReply::NoError;
+    QString failingHost; // answers 404 for this host
     QNetworkRequest last;
 protected:
     QNetworkReply* createRequest(Operation operation, const QNetworkRequest& request, QIODevice* upload) override {
         Q_UNUSED(operation); Q_UNUSED(upload);
         ++calls; last = request;
+        if (request.url().host() == failingHost)
+            return new FixtureReply(request, "not found", 404, {}, QNetworkReply::ContentNotFoundError, this);
         return new FixtureReply(request, data, status, contentRange, failure, this);
     }
 };
-QByteArray envelope() {
-    QFile file(QStringLiteral(VISNIP_TEST_SOURCE_DIR) + QStringLiteral("/fixtures-offline-manifest.json"));
-    if (!file.open(QIODevice::ReadOnly)) return {};
-    return file.readAll();
+OfflineResourceFile fixtureFile(const QStringList& sources)
+{
+    OfflineResourceFile file;
+    file.id = QStringLiteral("fixture"); file.label = QStringLiteral("fixture");
+    for (const QString& source : sources) file.sources.append(QUrl(source));
+    file.size = 6; file.sha256 = QByteArray(64, 'a'); // intentionally wrong hash
+    file.install = OfflineResourceFile::Install::ExtractZip; file.target = QStringLiteral("llama");
+    return file;
 }
-qint64 issuedAt() {
-    const auto outside = QJsonDocument::fromJson(envelope()).object();
-    return QJsonDocument::fromJson(QByteArray::fromBase64(outside.value(QStringLiteral("payload")).toString().toLatin1()))
-        .object().value(QStringLiteral("issued_at")).toInteger();
-}
+const QString kGitHub = QStringLiteral("https://github.com/ggml-org/llama.cpp/releases/download/b1/fixture.zip");
 }
 
 class OfflineResourceTests : public QObject {
     Q_OBJECT
 private slots:
-    void partialSelfTestNeverActivatesAndRecordsRegionReason() {
-        for (const auto& reason : {QStringLiteral("equivalent"), QStringLiteral("artwork_collision"), QStringLiteral("layout_unfit")}) {
-            QTemporaryDir root; QVERIFY(root.isValid());
-            OfflineResourceService manager;
-            manager.root_=root.path(); manager.quality_=QStringLiteral("precise"); manager.busy_=true;
-            manager.selfTestImage_=QImage(30,30,QImage::Format_RGB32); manager.selfTestImage_.fill(Qt::white);
-            ImageTranslationResult result; result.image=manager.selfTestImage_; result.image.setPixelColor(0,0,Qt::black); result.blockCount=3;
-            result.blocks=QJsonArray{QJsonObject{{QStringLiteral("status"),QStringLiteral("preserved")},{QStringLiteral("reason"),reason}},
-                QJsonObject{{QStringLiteral("status"),QStringLiteral("applied")}},QJsonObject{{QStringLiteral("status"),QStringLiteral("applied")}}};
-            QSignalSpy failed(&manager,&OfflineResourceService::failed); QSignalSpy done(&manager,&OfflineResourceService::succeeded);
-            emit manager.test_->succeeded(result,200);
-            QCOMPARE(failed.size(),1); QCOMPARE(done.size(),0);
-            QVERIFY(failed.first().first().toString().contains(QStringLiteral("第 1 段")));
-            QVERIFY(!QFileInfo::exists(root.filePath(QStringLiteral("vislate-managed.json"))));
-            QFile report(root.filePath(QStringLiteral("selftest-report.json"))); QVERIFY(report.open(QIODevice::ReadOnly));
-            QCOMPARE(QJsonDocument::fromJson(report.readAll()).object().value(QStringLiteral("blocks")).toArray().first().toObject().value(QStringLiteral("reason")).toString(),reason);
-        }
-    }
     void exportNativeSelfTestRasterWhenRequested() {
         const QString path=qEnvironmentVariable("VISNIP_SELFTEST_RASTER");
         if(path.isEmpty()) QSKIP("Explicit diagnostic: export the built-in synthetic image only.");
@@ -158,13 +144,13 @@ private slots:
         connect(&service,&OfflineResourceService::progress,&service,[&](qint64 bytes,qint64 expected){
             if (bytes>=262144) {reported=bytes;total=expected;service.cancel();}
         });
-        service.prepare(QStringLiteral("precise"));
+        service.prepare(QStringLiteral("lite"));
         QTRY_VERIFY_WITH_TIMEOUT(!paused.isEmpty()||!failed.isEmpty(),180000);
         const QString error=failed.isEmpty()?QString():failed.first().at(0).toString();
         QVERIFY2(failed.isEmpty(),qPrintable(error));QCOMPARE(paused.size(),1);
         const auto files=QDir(service.cacheRoot_).entryInfoList({QStringLiteral("*.part")},QDir::Files);
         QCOMPARE(files.size(),1);QCOMPARE(files.first().size(),reported);QVERIFY(total>reported);
-        QVERIFY(!service.process_);qInfo()<<"Real HTTP bytes == progress == partial file"<<reported<<"of"<<total;
+        QVERIFY(!service.extractor_);qInfo()<<"Real HTTP bytes == progress == partial file"<<reported<<"of"<<total;
     }
     void realPreferencesActivationWhenExplicitlyRequested() {
         if (qEnvironmentVariable("VISNIP_RESOURCE_PREFS_REAL_TEST").isEmpty())
@@ -179,7 +165,7 @@ private slots:
             auto* service = dialog.findChild<OfflineResourceService*>();
             auto* quality = dialog.findChild<QComboBox*>(QStringLiteral("VisnipSettingsOfflineQuality"));
             QVERIFY(offline && button && service && quality);
-            const QString requested = qEnvironmentVariable("VISNIP_RESOURCE_PREFS_QUALITY", QStringLiteral("precise"));
+            const QString requested = QStringLiteral("lite");
             quality->setCurrentIndex(quality->findData(requested));
             QCOMPARE(quality->currentData().toString(), requested);
             QSignalSpy done(service, &OfflineResourceService::succeeded);
@@ -209,22 +195,11 @@ private slots:
     }
     void realProvisioningWhenExplicitlyRequested() {
         const QString quality = qEnvironmentVariable("VISNIP_RESOURCE_REAL_TEST");
-        if (quality.isEmpty()) QSKIP("Set VISNIP_RESOURCE_REAL_TEST=basic/precise to download and install signed resources.");
+        if (quality.isEmpty()) QSKIP("Set VISNIP_RESOURCE_REAL_TEST=lite to download and install the official resources.");
         QNetworkProxyFactory::setUseSystemConfiguration(true);
         OfflineResourceService service;
         QSignalSpy done(&service, &OfflineResourceService::succeeded);
         QSignalSpy failed(&service, &OfflineResourceService::failed);
-        connect(service.test_, &OfflineTranslationService::succeeded, &service,
-            [&service](const ImageTranslationResult& result, qint64 ms) {
-                qInfo() << "Self-test model result" << result.blockCount << result.notice
-                    << "changed" << (result.image.convertToFormat(QImage::Format_RGB32) != service.selfTestImage_)
-                    << "milliseconds" << ms;
-                const QString prefix = qEnvironmentVariable("VISNIP_RESOURCE_TEST_IMAGES");
-                if (!prefix.isEmpty()) {
-                    service.selfTestImage_.save(prefix + QStringLiteral("-input.png"));
-                    result.image.save(prefix + QStringLiteral("-result.png"));
-                }
-            });
         connect(&service, &OfflineResourceService::approvalRequired, &service,
                 [&service](qint64 bytes, qint64 disk) { qInfo() << "Approved acceptance download bytes" << bytes << "disk" << disk; service.installApproved(); });
         connect(&service, &OfflineResourceService::statusChanged, &service,
@@ -236,45 +211,47 @@ private slots:
         QCOMPARE(done.size(), 1);
         qInfo() << "Actual download-install-selftest directory" << done.first().at(0).toString() << "test milliseconds" << done.first().at(2).toLongLong();
     }
-    void validPinnedSignatureAndExpiry() {
-        QVERIFY(!envelope().isEmpty());
-        OfflineResourceManifest result; QString error;
-        QVERIFY2(OfflineResourceManifest::parse(envelope(), &result, &error, issuedAt() + 60), qPrintable(error));
-        QCOMPARE(result.packages.size(), 2);
-        QCOMPARE(result.packages[0].id, QStringLiteral("base"));
-        QCOMPARE(result.packages[1].id, QStringLiteral("precise"));
-        QVERIFY(!OfflineResourceManifest::parse(envelope(), &result, &error, result.expiresAt + 1));
-        QVERIFY(error.contains(QStringLiteral("过期")));
+    void catalogPinsOfficialFilesOnly() {
+        const auto files = OfflineResourceCatalog::liteFiles();
+        QCOMPARE(files.size(), 2);
+        QCOMPARE(files[0].target, QStringLiteral("llama"));
+        QCOMPARE(files[0].install, OfflineResourceFile::Install::ExtractZip);
+        QCOMPARE(files[1].target, QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf"));
+        QCOMPARE(files[1].install, OfflineResourceFile::Install::Place);
+        QCOMPARE(files[1].sources.size(), 2);
+        QCOMPARE(files[1].sources[0].host(), QStringLiteral("www.modelscope.cn"));
+        QCOMPARE(files[1].sources[1].host(), QStringLiteral("huggingface.co"));
+        for (const auto& file : files) {
+            QVERIFY(QRegularExpression(QStringLiteral("^[a-f0-9]{64}$")).match(QString::fromLatin1(file.sha256)).hasMatch());
+            QVERIFY(file.size > 0);
+            for (const QUrl& source : file.sources) {
+                QVERIFY2(OfflineResourceCatalog::isAllowedDownload(source), qPrintable(source.toString()));
+                QVERIFY(!source.hasQuery());
+                QVERIFY(!source.host().contains(QStringLiteral("ipxair")) && !source.host().contains(QStringLiteral("visnip")));
+            }
+        }
     }
-    void tamperingNeverAuthorizesExecution() {
-        auto object = QJsonDocument::fromJson(envelope()).object();
-        auto payload = QByteArray::fromBase64(object.value(QStringLiteral("payload")).toString().toLatin1());
-        payload.replace("offline-preview", "offline-exploit");
-        object[QStringLiteral("payload")] = QString::fromLatin1(payload.toBase64());
-        OfflineResourceManifest result; QString error;
-        QVERIFY(!OfflineResourceManifest::parse(QJsonDocument(object).toJson(), &result, &error, issuedAt() + 60));
-        QVERIFY(error.contains(QStringLiteral("签名")));
-        object = QJsonDocument::fromJson(envelope()).object();
-        object[QStringLiteral("key_id")] = QStringLiteral("attacker");
-        QVERIFY(!OfflineResourceManifest::parse(QJsonDocument(object).toJson(), &result, &error, issuedAt() + 60));
-        QVERIFY(!OfflineResourceManifest::parse(QByteArray(40000, 'x'), &result, &error));
-    }
-    void sourceAllowlist() {
-        const QString good = QStringLiteral("https://vislate.ipxair.com/api/v1/downloads/") + QString(32, 'a');
-        QVERIFY(OfflineResourceManifest::isAllowedDownload(QUrl(good)));
-        for (const QString& bad : {good + QStringLiteral("?redirect=1"), good + QStringLiteral("#fragment"),
-             QString(good).replace(QStringLiteral("https:"), QStringLiteral("http:")),
-             QString(good).replace(QStringLiteral("vislate.ipxair.com"), QStringLiteral("evil.example")),
-             QString(good).replace(QStringLiteral("https://"), QStringLiteral("https://user:pass@"))})
-            QVERIFY(!OfflineResourceManifest::isAllowedDownload(QUrl(bad)));
+    void downloadsFollowOnlyOfficialHosts() {
+        for (const QString& good : {QStringLiteral("https://github.com/ggml-org/llama.cpp/releases/download/b1/a.zip"),
+             QStringLiteral("https://release-assets.githubusercontent.com/x?sig=1&exp=2"),
+             QStringLiteral("https://cdn-lfs-cn-1.modelscope.cn/prod/lfs-objects/dc/5f/abc"),
+             QStringLiteral("https://us.aws.cdn.hf.co/x?Signature=1"),
+             QStringLiteral("https://cdn-lfs.huggingface.co/x")})
+            QVERIFY2(OfflineResourceCatalog::isAllowedDownload(QUrl(good)), qPrintable(good));
+        for (const QString& bad : {QStringLiteral("http://github.com/a.zip"),
+             QStringLiteral("https://evil.example/a.zip"), QStringLiteral("https://evilgithub.com/a.zip"),
+             QStringLiteral("https://github.com.evil.example/a.zip"), QStringLiteral("https://user:pass@github.com/a.zip"),
+             QStringLiteral("https://github.com:8443/a.zip"), QStringLiteral("https://github.com/a.zip#x"),
+             QStringLiteral("https://vislate.ipxair.com/api/v1/downloads/") + QString(32, 'a')})
+            QVERIFY2(!OfflineResourceCatalog::isAllowedDownload(QUrl(bad)), qPrintable(bad));
     }
     void rangeResponsesMustMatchSignedSize() {
-        QVERIFY(OfflineResourceManifest::acceptsRange(200, {}, 0, 1000, 1000));
-        QVERIFY(OfflineResourceManifest::acceptsRange(206, "bytes 500-999/1000", 500, 1000, 500));
-        QVERIFY(!OfflineResourceManifest::acceptsRange(206, "bytes 0-499/1000", 500, 1000, 500));
-        QVERIFY(!OfflineResourceManifest::acceptsRange(206, "bytes 500-999/9000", 500, 1000, 500));
-        QVERIFY(!OfflineResourceManifest::acceptsRange(200, {}, 500, 1000, 500));
-        QVERIFY(!OfflineResourceManifest::acceptsRange(302, {}, 0, 1000, 1000));
+        QVERIFY(OfflineResourceCatalog::acceptsRange(200, {}, 0, 1000, 1000));
+        QVERIFY(OfflineResourceCatalog::acceptsRange(206, "bytes 500-999/1000", 500, 1000, 500));
+        QVERIFY(!OfflineResourceCatalog::acceptsRange(206, "bytes 0-499/1000", 500, 1000, 500));
+        QVERIFY(!OfflineResourceCatalog::acceptsRange(206, "bytes 500-999/9000", 500, 1000, 500));
+        QVERIFY(!OfflineResourceCatalog::acceptsRange(200, {}, 500, 1000, 500));
+        QVERIFY(!OfflineResourceCatalog::acceptsRange(302, {}, 0, 1000, 1000));
     }
     void selectingOfflineNeverDownloadsUntilButtonIsPressed() {
         QTemporaryDir temp; QVERIFY(temp.isValid());
@@ -293,16 +270,16 @@ private slots:
         for (auto* button : dialog.findChildren<QPushButton*>()) QVERIFY(button->text() != QStringLiteral("资源下载页"));
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
     }
-    void invalidCatalogFailsBeforeResourceDownload() {
+    void preciseTierIsNeverDownloaded() {
         QTemporaryDir temp; OfflineResourceService service;
         auto* network = new FixtureNetwork; network->setParent(&service);
         delete service.network_; service.network_ = network;
-        service.cacheRoot_ = temp.filePath(QStringLiteral("cache")); network->data = "{}";
+        service.cacheRoot_ = temp.filePath(QStringLiteral("cache"));
         QSignalSpy failed(&service, &OfflineResourceService::failed);
         service.prepare(QStringLiteral("precise"));
-        QTRY_COMPARE(failed.count(), 1); QCOMPARE(network->calls, 1); QVERIFY(!service.isBusy());
-        QVERIFY(network->last.rawHeader("Authorization").isEmpty());
-        QVERIFY(network->last.rawHeader("Cookie").isEmpty());
+        QCOMPARE(failed.count(), 1); QCOMPARE(network->calls, 0); QVERIFY(!service.isBusy());
+        QVERIFY(failed.first().first().toString().contains(QStringLiteral("官方")));
+        QCOMPARE(service.statusText(), failed.first().first().toString());
     }
     void preferencesEnableOnlyAfterSuccessfulSelfTestSignal() {
         QTemporaryDir temporary; QVERIFY(temporary.isValid());
@@ -341,36 +318,19 @@ private slots:
         }
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
     }
-    void existingAdapterIsNeverOverwrittenWhenItChanges() {
-        QTemporaryDir temporary; QVERIFY(temporary.isValid());
-        OfflineResourceService service;
-        service.root_ = temporary.path(); service.reuse_ = true; service.busy_ = true;
-        service.clientAdapter_ = "expected first-party adapter";
-        QVERIFY(QDir().mkpath(temporary.filePath(QStringLiteral("vislate_engine"))));
-        QFile adapter(temporary.filePath(QStringLiteral("vislate_engine/native_translation.py")));
-        QVERIFY(adapter.open(QIODevice::WriteOnly)); adapter.write("modified adapter"); adapter.close();
-        QSignalSpy failed(&service, &OfflineResourceService::failed);
-        service.selfTest();
-        QCOMPARE(failed.count(), 1);
-        QVERIFY(!service.test_->isBusy());
-        QVERIFY(adapter.open(QIODevice::ReadOnly)); QCOMPARE(adapter.readAll(), QByteArray("modified adapter"));
-    }
     void transientHttpPageIsNeverAppendedAndCanRetry() {
         QTemporaryDir temporary; QVERIFY(temporary.isValid());
         OfflineResourceService service;
         auto* network = new FixtureNetwork; network->setParent(&service);
         delete service.network_; service.network_ = network;
         service.cacheRoot_ = temporary.path(); service.busy_ = true;
-        OfflineResourcePackage package; package.id = QStringLiteral("base"); package.size = 6;
-        package.sha256 = QByteArray(64, 'a');
-        package.url = QUrl(QStringLiteral("https://vislate.ipxair.com/api/v1/downloads/") + QString(32, 'b'));
-        service.plan_ = {package}; service.totalBytes_ = 6;
-        QFile partial(service.packagePath(true));
+        service.plan_ = {fixtureFile({kGitHub})}; service.totalBytes_ = 6;
+        QFile partial(service.filePath(true));
         QVERIFY(partial.open(QIODevice::WriteOnly)); partial.write("abc"); partial.close();
         network->status = 429; network->data = "rate limit HTML is not package bytes";
         network->failure = QNetworkReply::UnknownContentError;
         QSignalSpy failed(&service, &OfflineResourceService::failed);
-        service.requestPackage();
+        service.requestFile();
         QTRY_COMPARE(service.retries_, 1);
         QCOMPARE(failed.count(), 0);
         QVERIFY(partial.open(QIODevice::ReadOnly)); QCOMPARE(partial.readAll(), QByteArray("abc")); partial.close();
@@ -378,19 +338,59 @@ private slots:
         network->failure = QNetworkReply::NoError;
         QTRY_COMPARE_WITH_TIMEOUT(network->calls, 2, 5000);
         QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 1, 5000); // Fixture intentionally has a wrong hash.
-        QCOMPARE(network->last.rawHeader("Range"), QByteArray("bytes=3-5"));
+        QCOMPARE(network->last.rawHeader("Range"), QByteArray("bytes=3-"));
         QVERIFY(failed.first().at(0).toString().contains(QStringLiteral("校验失败")));
-        QVERIFY(!service.process_);
+        QVERIFY(!QFileInfo::exists(service.filePath(true))); // never kept, never extracted
+        QVERIFY(!service.extractor_);
     }
-    void offlineOffersTwoTiersWithoutNetworkControlsAndProgressUsesBytes() {
+    void fallbackSourceContinuesFromTheSamePartialFile() {
+        QTemporaryDir temporary; QVERIFY(temporary.isValid());
+        OfflineResourceService service;
+        auto* network = new FixtureNetwork; network->setParent(&service);
+        delete service.network_; service.network_ = network;
+        service.cacheRoot_ = temporary.path(); service.busy_ = true;
+        service.plan_ = {fixtureFile({QStringLiteral("https://www.modelscope.cn/models/x/resolve/1/m.gguf"),
+                                      QStringLiteral("https://huggingface.co/x/resolve/1/m.gguf")})};
+        service.totalBytes_ = 6;
+        QFile partial(service.filePath(true));
+        QVERIFY(partial.open(QIODevice::WriteOnly)); partial.write("abc"); partial.close();
+        network->failingHost = QStringLiteral("www.modelscope.cn");
+        network->status = 206; network->data = "def"; network->contentRange = "bytes 3-5/6";
+        QSignalSpy failed(&service, &OfflineResourceService::failed);
+        service.requestFile();
+        QTRY_COMPARE_WITH_TIMEOUT(network->calls, 2, 5000);
+        QCOMPARE(network->last.url().host(), QStringLiteral("huggingface.co"));
+        QCOMPARE(network->last.rawHeader("Range"), QByteArray("bytes=3-"));
+        QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 1, 5000); // the fixture hash is wrong
+        QVERIFY(failed.first().at(0).toString().contains(QStringLiteral("校验失败")));
+        QVERIFY(!service.extractor_);
+    }
+    void existingPreciseInstallationStaysSelectable() {
+        QTemporaryDir temp; QVERIFY(temp.isValid());
+        qputenv("VISNIP_TEST_SETTINGS_FILE",QFile::encodeName(temp.filePath(QStringLiteral("settings.ini"))));
+        const QDir root(temp.filePath(QStringLiteral("precise")));
+        for (const QString& relative : {QStringLiteral("python/python.exe"), QStringLiteral("precise.json"),
+             QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf"), QStringLiteral("llama/llama-server.exe"), QStringLiteral("models/hi_sam_b.pth")}) {
+            QVERIFY(QDir().mkpath(QFileInfo(root.filePath(relative)).absolutePath()));
+            QFile file(root.filePath(relative)); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("x");
+        }
+        AppConfig config; auto& settings=config.mutableSettings().aiTranslate;
+        settings.translationMethod=TranslationMethod::Offline; settings.offlineQuality=QStringLiteral("precise");
+        settings.offlineResourceDirectory=root.absolutePath();
+        SettingsDialog dialog(&config); dialog.showPage(SettingsDialog::Page::Translation);
+        auto* quality=dialog.findChild<QComboBox*>(QStringLiteral("VisnipSettingsOfflineQuality"));QVERIFY(quality);
+        QCOMPARE(quality->count(),2);QCOMPARE(quality->currentData().toString(),QStringLiteral("precise"));
+        qunsetenv("VISNIP_TEST_SETTINGS_FILE");
+    }
+    void offlineOffersOnlyTheLiteTierWithoutNetworkControlsAndProgressUsesBytes() {
         QTemporaryDir temp; QVERIFY(temp.isValid());
         qputenv("VISNIP_TEST_SETTINGS_FILE",QFile::encodeName(temp.filePath(QStringLiteral("settings.ini"))));
         AppConfig config; config.mutableSettings().aiTranslate.translationMethod=TranslationMethod::Offline;
         SettingsDialog dialog(&config); dialog.resize(840,620); dialog.showPage(SettingsDialog::Page::Translation);
         dialog.show();QTest::qWait(50);
         auto* quality=dialog.findChild<QComboBox*>(QStringLiteral("VisnipSettingsOfflineQuality"));QVERIFY(quality);
-        QCOMPARE(quality->count(),2);QCOMPARE(quality->itemData(0).toString(),QStringLiteral("lite"));
-        QCOMPARE(quality->itemData(1).toString(),QStringLiteral("precise"));QCOMPARE(quality->currentIndex(),0);
+        QCOMPARE(quality->count(),1);QCOMPARE(quality->itemData(0).toString(),QStringLiteral("lite"));
+        QCOMPARE(quality->currentIndex(),0);
         auto* remote=dialog.findChild<QWidget*>(QStringLiteral("VisnipSettingsRemotePanel"));QVERIFY(remote);QVERIFY(!remote->isVisible());
         auto* advanced=dialog.findChild<QToolButton*>(QStringLiteral("VisnipSettingsAdvancedMethods"));QVERIFY(advanced);QVERIFY(!advanced->isVisible());
         auto* bar=dialog.findChild<QProgressBar*>(QStringLiteral("VisnipSettingsOfflineProgress"));QVERIFY(bar);
@@ -409,30 +409,29 @@ private slots:
         QTemporaryDir temp;QVERIFY(temp.isValid());OfflineResourceService service;
         auto* network=new FixtureNetwork;network->setParent(&service);delete service.network_;service.network_=network;
         service.cacheRoot_=temp.path();service.busy_=true;service.retries_=3;
-        OfflineResourcePackage p;p.id=QStringLiteral("base");p.size=6;p.sha256=QByteArray(64,'a');p.url=QUrl(QStringLiteral("https://vislate.ipxair.com/api/v1/downloads/")+QString(32,'b'));
-        service.plan_={p};service.totalBytes_=6;
-        QFile file(service.packagePath(true));QVERIFY(file.open(QIODevice::WriteOnly));file.write("abc");file.close();
+        service.plan_={fixtureFile({kGitHub})};service.totalBytes_=6;
+        QFile file(service.filePath(true));QVERIFY(file.open(QIODevice::WriteOnly));file.write("abc");file.close();
         network->status=429;network->data="slow down";
-        QSignalSpy failed(&service,&OfflineResourceService::failed);service.requestPackage();QTRY_COMPARE(failed.size(),1);
-        QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),QByteArray("abc"));QVERIFY(!service.process_);
+        QSignalSpy failed(&service,&OfflineResourceService::failed);service.requestFile();QTRY_COMPARE(failed.size(),1);
+        QVERIFY(failed.first().at(0).toString().contains(QStringLiteral("已保留下载进度")));
+        QVERIFY(file.open(QIODevice::ReadOnly));QCOMPARE(file.readAll(),QByteArray("abc"));QVERIFY(!service.extractor_);
     }
     void interruptedDownloadKeepsPartialAndResumeRange() {
         QTemporaryDir temp; QVERIFY(temp.isValid());
         OfflineResourceService service; auto* network = new FixtureNetwork; network->setParent(&service);
         delete service.network_; service.network_ = network;
         service.cacheRoot_ = temp.path(); service.busy_ = true;
-        OfflineResourcePackage package; package.id = QStringLiteral("base"); package.size = 6;
-        package.sha256 = QByteArray(64, 'a'); package.url = QUrl(QStringLiteral("https://vislate.ipxair.com/api/v1/downloads/") + QString(32, 'b'));
-        service.plan_ = {package}; service.totalBytes_ = 6;
-        QFile partial(service.packagePath(true)); QVERIFY(partial.open(QIODevice::WriteOnly)); partial.write("abc"); partial.close();
+        service.plan_ = {fixtureFile({kGitHub})}; service.totalBytes_ = 6;
+        service.retries_ = 3; // retries spent: the interruption ends the attempt
+        QFile partial(service.filePath(true)); QVERIFY(partial.open(QIODevice::WriteOnly)); partial.write("abc"); partial.close();
         network->status = 206; network->contentRange = "bytes 3-5/6"; network->data = "def";
         // The response body is complete but the simulated network disconnect must prevent execution.
         network->failure = QNetworkReply::RemoteHostClosedError;
         QSignalSpy failed(&service, &OfflineResourceService::failed);
-        service.requestPackage(); QTRY_COMPARE(failed.count(), 1);
-        QCOMPARE(network->last.rawHeader("Range"), QByteArray("bytes=3-5"));
+        service.requestFile(); QTRY_COMPARE(failed.count(), 1);
+        QCOMPARE(network->last.rawHeader("Range"), QByteArray("bytes=3-"));
         QVERIFY(partial.open(QIODevice::ReadOnly)); QCOMPARE(partial.readAll(), QByteArray("abcdef"));
-        QVERIFY(!service.process_); QVERIFY(!service.isBusy());
+        QVERIFY(!service.extractor_); QVERIFY(!service.isBusy());
     }
 };
 }

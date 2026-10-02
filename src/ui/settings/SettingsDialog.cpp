@@ -1384,23 +1384,31 @@ QWidget* SettingsDialog::createTranslationPage()
     offlineQuality->setObjectName(QStringLiteral("VisnipSettingsOfflineQuality"));
     offlineQuality->setMinimumWidth(200);
     offlineQuality->addItem(QStringLiteral("轻量（推荐）"), QStringLiteral("lite"));
-    offlineQuality->addItem(QStringLiteral("精细（需较多内存）"), QStringLiteral("precise"));
+    // Precise resources have no official upstream package, so they can no
+    // longer be downloaded; an installation from an earlier version still runs.
+    if (settings.offlineQuality == QStringLiteral("precise")
+        && OfflineTranslationService::resourceProblem(settings.offlineResourceDirectory, QStringLiteral("precise")).isEmpty()) {
+        offlineQuality->addItem(QStringLiteral("精细（已安装）"), QStringLiteral("precise"));
+    }
     offlineQuality->setCurrentIndex(qMax(0, offlineQuality->findData(settings.offlineQuality)));
-    offlineLayout->addWidget(controlRow(QStringLiteral("处理档位"),
-        QStringLiteral("轻量适合大多数电脑；精细额外擦除复杂背景，建议有独立显卡"), offlineQuality));
+    auto* qualityRow = controlRow(QStringLiteral("处理档位"),
+        QStringLiteral("轻量适合大多数电脑；精细额外擦除复杂背景，建议有独立显卡"), offlineQuality);
+    qualityRow->setVisible(offlineQuality->count() > 1);
+    offlineLayout->addWidget(qualityRow);
     const auto selectedQuality = [offlineQuality]() { return offlineQuality->currentData().toString(); };
     const auto updateOfflineSummary = [summaryLabels, selectedQuality]() {
         if (summaryLabels.size() < 2) return;
         const bool lite = selectedQuality() == QStringLiteral("lite");
         summaryLabels[0]->setText(lite ? QStringLiteral("本机离线翻译 · 轻量") : QStringLiteral("本机离线翻译 · 精细处理"));
         summaryLabels[1]->setText(lite
-            ? QStringLiteral("当前支持中英文。本机识别文字后，由本地翻译模型按上下文翻译并原位回填；不需要 Python 或显卡，资源约 1.2 GiB。模型就绪后连续截图无需重复加载，空闲 10 分钟后释放。翻译不上传截图或文字。")
+            ? QStringLiteral("当前支持中英文。本机识别文字后，由本地翻译模型按上下文翻译并原位回填；不需要 Python 或显卡。资源约 1.1 GiB，直接从官方渠道下载：llama.cpp 来自 GitHub，腾讯 Hy-MT2 翻译模型来自魔搭社区（ModelScope），不可用时改用 Hugging Face。模型就绪后连续截图无需重复加载，空闲 10 分钟后释放。翻译不上传截图或文字。")
             : QStringLiteral("当前支持中英文，文字翻译优先使用可用显卡。简单背景直接分析文字笔画，复杂区域才加载 Hi-SAM 和修复模型。资源约 6 GiB，模型就绪后连续截图无需重复加载，空闲 5 分钟后释放。首次显卡预热可能较慢。翻译不上传截图或文字。"));
     };
     updateOfflineSummary();
     auto* offlineStatus = hint(QString());
     offlineStatus->setObjectName(QStringLiteral("VisnipSettingsOfflineStatus"));
     offlineStatus->setWordWrap(true);
+    offlineStatus->setTextInteractionFlags(Qt::TextSelectableByMouse); // e.g. the runtime download link
     offlineStatus->setMinimumWidth(0);
     offlineLayout->addWidget(offlineStatus);
     auto* phaseLabel = new QLabel;
@@ -1459,8 +1467,9 @@ QWidget* SettingsDialog::createTranslationPage()
         offlineStatus->setText(ready
             ? (lite ? QStringLiteral("轻量资源已找到。自检通过后自动启用，无需联网。")
                     : QStringLiteral("完整资源已找到。检查并自检通过后自动启用精细离线翻译；已有下载会复用。"))
-            : (lite ? QStringLiteral("轻量离线资源尚未就绪。点击“下载并启用”，客户端将自动下载约 1.2 GiB 的翻译模型。")
-                    : QStringLiteral("精细离线资源尚未就绪。点击“下载并启用”，客户端将自动准备完整资源（约 2.4 GiB 下载）。")));
+            : (lite ? (problem.contains(QStringLiteral("Visual C++")) ? problem
+                        : QStringLiteral("轻量离线资源尚未就绪。点击“下载并启用”，客户端将从官方渠道下载约 1.1 GiB 并逐个核对 SHA-256。"))
+                    : QStringLiteral("精细离线资源不完整，且无法再自动下载。请选择“轻量”，或在“导入已有离线资源”中选择完整的精细资源文件夹。")));
         offlineRoot->setToolTip(offlineRoot->text());
     };
     const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,importToggle,importOffline,methodGroup,offlineRoot,offlineQuality,selectedQuality](bool busy) {
@@ -1492,9 +1501,8 @@ QWidget* SettingsDialog::createTranslationPage()
         updateOfflineSummary(); refreshOffline(); busyControls(resources->isBusy());
     });
     connect(downloadOffline, &QPushButton::clicked, page, [resources,offlineRoot,selectedQuality,startSelfTest]() {
-        // Installed lite resources need no manifest request: test and enable.
-        if (selectedQuality() == QStringLiteral("lite")
-            && OfflineTranslationService::resourceProblem(offlineRoot->text(), QStringLiteral("lite")).isEmpty()) {
+        // Installed resources need no download: test and enable.
+        if (OfflineTranslationService::resourceProblem(offlineRoot->text(), selectedQuality()).isEmpty()) {
             startSelfTest();
             return;
         }
@@ -1508,7 +1516,7 @@ QWidget* SettingsDialog::createTranslationPage()
         resourceProgress->setVisible(phase == QStringLiteral("download"));
         phaseLabel->setText(phase == QStringLiteral("download") ? QStringLiteral("下载：以下进度来自实际接收的资源字节（含已下载缓存）")
             : phase == QStringLiteral("verify") ? QStringLiteral("校验：正在核对文件 SHA-256，不代表仍在下载")
-            : phase == QStringLiteral("install") ? QStringLiteral("安装：正在展开运行环境和模型，请稍候")
+            : phase == QStringLiteral("install") ? QStringLiteral("安装：正在解压 llama.cpp，请稍候")
             : phase == QStringLiteral("selftest") ? (resources->targetQuality() == QStringLiteral("lite")
                 ? QStringLiteral("自检：正在本机验证翻译模型")
                 : QStringLiteral("自检：正在本机验证识别、翻译、分割和回填")) : QString());
@@ -1522,11 +1530,14 @@ QWidget* SettingsDialog::createTranslationPage()
     });
     connect(resources, &OfflineResourceService::busyChanged, page, busyControls);
     connect(resources, &OfflineResourceService::approvalRequired, page, [this,resources](qint64 bytes,qint64 disk) {
-        const bool lite = resources->targetQuality() == QStringLiteral("lite");
-        const auto answer=QMessageBox::question(this,lite ? QStringLiteral("准备轻量离线资源") : QStringLiteral("准备完整离线资源"),
-            QStringLiteral("还需下载 %1 GiB，至少预留 %2 GiB 磁盘空间。将自动处理全部依赖，不需要手动安装。\n\n确认后下载、验签、安装、自检，通过后启用；失败不会改为联网翻译。%3\n\n下载请求记录 IP 等基础信息，最多保留 30 天，不上传截图。资源清单有签名，但 Windows 发布者代码签名仍未完成，不绕过系统保护。")
-            .arg(bytes/double(1024LL*1024*1024),0,'f',2).arg(disk/double(1024LL*1024*1024),0,'f',1)
-            .arg(lite ? QStringLiteral("轻量翻译运行时约占用 2 GB 内存。") : QStringLiteral("CPU 精细处理可能占用较多内存。")),
+        const auto answer=QMessageBox::question(this,QStringLiteral("准备轻量离线资源"),
+            QStringLiteral("还需下载 %1 GiB，至少预留 %2 GiB 磁盘空间。不需要手动安装。\n\n"
+                           "文件直接来自官方发布渠道，Visnip 的服务器不参与：\n"
+                           "· llama.cpp b10964（GitHub，ggml-org/llama.cpp）\n"
+                           "· 腾讯 Hy-MT2-1.8B 翻译模型（魔搭社区 ModelScope，不可用时改用 Hugging Face）\n"
+                           "下载时这些网站会收到你的 IP 等常规访问信息，不会上传截图或文字。\n\n"
+                           "下载后逐个核对 SHA-256，再自检，通过后启用；失败不会改为联网翻译。轻量翻译运行时约占用 2 GB 内存。")
+            .arg(bytes/double(1024LL*1024*1024),0,'f',2).arg(disk/double(1024LL*1024*1024),0,'f',1),
             QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel);
         if (answer==QMessageBox::Yes) resources->installApproved(); else resources->cancel();
     });

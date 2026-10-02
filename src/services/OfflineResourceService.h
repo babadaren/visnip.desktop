@@ -1,11 +1,10 @@
 #pragma once
-#include "core/OfflineResourceManifest.h"
+#include "core/OfflineResourceCatalog.h"
 #include <QFile>
-#include <QImage>
 #include <QLockFile>
 #include <QObject>
 #include <QPointer>
-#include <QMap>
+#include <QProcess>
 #include <QTimer>
 #include <memory>
 
@@ -13,10 +12,11 @@ class QNetworkAccessManager;
 class QNetworkReply;
 namespace Visnip {
 class LocalTextTranslationService;
-class OfflineTranslationService;
 class OfflineResourceTests;
 
 // Resource provisioning uses an explicit user action. Image translation never calls this service.
+// Only the lite tier is provisioned. Its files come straight from their
+// publishers (core/OfflineResourceCatalog), checked against pinned SHA-256.
 class OfflineResourceService final : public QObject {
     Q_OBJECT
 public:
@@ -41,43 +41,40 @@ signals:
 private:
     friend class OfflineResourceTests;
     void status(const QString& text);
+    void reject(const QString& message);
     void finish();
     void fail(const QString& message);
     void preparePlan();
-    void nextPackage();
+    void nextFile();
     void checkCached(bool completeFile);
-    void requestPackage();
-    void readPackage();
-    void packageFinished();
-    void installPackage();
-    void pollInstaller();
-    void stopInstaller();
+    void requestFile();
+    void readFile();
+    void fileFinished();
+    void retryOrSwitch(bool transient, const QString& reason);
+    void switchSource(const QString& reason);
+    void installFile();
+    void extractionFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void stopExtractor();
     void selfTest();
     void recordActivation(qint64 ms);
-    bool stageClientCode();
     void releaseReply();
-    QString packagePath(bool partial = false) const;
+    QString filePath(bool partial = false) const;
+    QString sourceName() const;
     QNetworkAccessManager* network_ = nullptr;
     QPointer<QNetworkReply> reply_;
-    OfflineTranslationService* test_ = nullptr;
     LocalTextTranslationService* liteTest_ = nullptr;
+    QPointer<QProcess> extractor_;
+    QTimer extractTimeout_;
     std::unique_ptr<QLockFile> lock_;
     QFile output_;
-    QImage selfTestImage_;
-    QTimer installerPoll_;
-    void* process_ = nullptr;
-    void* job_ = nullptr;
-    qint64 installStarted_ = 0;
-    QByteArray manifestBody_;
-    QByteArray clientAdapter_;
-    QMap<QString,QByteArray> clientModules_;
-    OfflineResourceManifest manifest_;
-    QVector<OfflineResourcePackage> plan_;
+    QVector<OfflineResourceFile> plan_;
     QString root_, quality_, status_, cacheRoot_;
     int index_ = 0;
+    int source_ = 0;
     int retries_ = 0;
     quint64 serial_ = 0;
     qint64 offset_ = 0, requestedEnd_ = 0, completedBytes_ = 0, totalBytes_ = 0;
     bool busy_ = false, awaitingApproval_ = false, headersChecked_ = false, reuse_ = false;
+    bool redirectRejected_ = false, badResponse_ = false;
 };
 }

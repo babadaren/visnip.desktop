@@ -20,7 +20,7 @@
   -> composeTranslatedImage（C++，QPainter，与混合模式相同）
 ```
 
-资源只需要基础包里的两样东西：`llama/llama-server.exe` 和 `models/Hy-MT2-1.8B-Q4_K_M.gguf`。首选项选「轻量」时只下载基础包（约 1.2 GiB），不安装也不调用 Python。已经装过精细资源的目录同样满足轻量档。
+资源只需要两样东西：`llama/llama-server.exe`（llama.cpp 官方 CPU 构建，含它的 DLL）和 `models/Hy-MT2-1.8B-Q4_K_M.gguf`。0.4.1 起两者都直接从官方渠道下载（共约 1.1 GiB，见 `docs/offline-resource-manager.md`），不调用 Python。已经装过旧基础包或精细资源的目录同样满足轻量档。
 
 ## 关键设计
 
@@ -78,5 +78,5 @@ OCR (0.2–0.5 s) + 170 / prefill速度 + 75 / decode速度（串行时）+ 回�
 
 - Windows 上的完整构建、界面和截图翻译还没有实机验证（本次只在 Linux 上编译检查，Windows 专用代码用 mingw 做了语法检查）。显卡路径还没有在真实显卡上验证。
 - 逐段渐进显示（先译完的段先回填）还没有实现。
-- 轻量专用资源包（只含 llama-server 和模型，不含 Python）需要服务端重新打包；现在复用基础包，其中仍带 Python 运行时。
+- 0.4.1 起不再使用服务端打包的基础包：llama.cpp 和模型都直接从官方渠道下载。
 - 空间不足而保留原文的段，还没有接入精细档那样的译文面板。

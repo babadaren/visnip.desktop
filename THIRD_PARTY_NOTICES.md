@@ -20,16 +20,18 @@ The Windows release package contains these license texts in its `licenses/` fold
 
 ## Downloaded separately: offline translation resources
 
-The offline packages are downloaded only when the user explicitly starts the download in the preferences. They are not part of this repository.
+These resources are downloaded only when the user explicitly starts the download in the preferences. They are not part of this repository or of the Visnip package, and Visnip does not host or redistribute them. The client fetches the publishers' own files from the addresses pinned in `src/core/OfflineResourceCatalog.cpp` and checks each one against its SHA-256.
 
-### Lite tier (base package)
+### Lite tier
 
 | Component | Version / source | License |
 | --- | --- | --- |
-| llama.cpp (`llama-server`) | release b10964, https://github.com/ggml-org/llama.cpp | MIT |
-| Hy-MT2-1.8B-GGUF (`Hy-MT2-1.8B-Q4_K_M.gguf`) | revision `a0c709d9fac510f2c807aa3af52872340dc37a4a`, https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF | Apache-2.0, Copyright (C) 2026 Tencent |
+| llama.cpp (`llama-b10964-bin-win-cpu-x64.zip`, official Windows CPU build including LLVM OpenMP `libomp.dll`) | release b10964, https://github.com/ggml-org/llama.cpp | MIT (llama.cpp); Apache-2.0 with LLVM exception (OpenMP, `LICENSE-LLVM-OpenMP` in the archive) |
+| Hy-MT2-1.8B-GGUF (`Hy-MT2-1.8B-Q4_K_M.gguf`) | ModelScope `Tencent-Hunyuan/Hy-MT2-1.8B-GGUF` (commit `ef1d40b8b315575d30d1eb6579996130b8fc0bb2`), or Hugging Face `tencent/Hy-MT2-1.8B-GGUF` (revision `a0c709d9fac510f2c807aa3af52872340dc37a4a`); identical file | Apache-2.0, Copyright (C) 2026 Tencent |
 
-### Precise tier (adds the following)
+The official llama.cpp build needs the Microsoft Visual C++ 2015-2022 runtime. Visnip does not ship it; the client asks the user to install Microsoft's redistributable when it is missing.
+
+### Precise tier (earlier versions only; no longer downloaded)
 
 | Component | Source | License |
 | --- | --- | --- |

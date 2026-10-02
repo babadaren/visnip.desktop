@@ -2,6 +2,17 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
+## 0.4.1
+
+### Offline resources come from their publishers
+
+- The lite tier downloads the official files directly: the llama.cpp b10964 Windows CPU build from GitHub, and Tencent's Hy-MT2-1.8B model from ModelScope, with Hugging Face as the fallback. Visnip no longer hosts or relays any resource file, and the client no longer contacts `vislate.ipxair.com`.
+- Download addresses and SHA-256 are pinned in `src/core/OfflineResourceCatalog.cpp`. Every file is checked before use. Redirects are followed only to the publishers' own CDN hosts.
+- Interrupted downloads resume from the downloaded size. A source that cannot be reached is skipped for the next one without losing progress.
+- The download is about 1.1 GiB (previously 1.2 GiB). The model is written straight to where it runs instead of being stored twice.
+- The official llama.cpp build needs the Microsoft Visual C++ 2015-2022 runtime. When it is missing, the preferences say so before anything is downloaded and link to Microsoft's redistributable.
+- The precise tier has no official upstream package and can no longer be downloaded. Precise resources installed by an earlier version keep working and stay selectable.
+
 ## 0.4.0
 
 First open-source release under the Apache License 2.0.

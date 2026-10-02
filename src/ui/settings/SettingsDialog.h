@@ -9,6 +9,7 @@
 #include <QStackedWidget>
 
 class QCloseEvent;
+class QShowEvent;
 class QLabel;
 class QKeySequenceEdit;
 class QTimer;
@@ -17,6 +18,7 @@ namespace Visnip {
 
 class OcrPackDownloadService;
 class OfflineResourceService;
+class UpdateService;
 
 class SettingsDialog : public QDialog {
     Q_OBJECT
@@ -47,6 +49,7 @@ signals:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     QWidget* createGeneralPage();
@@ -61,12 +64,15 @@ private:
     void addPage(Page pageId, const QString& title);
     void ensurePage(Page pageId);
     void resetPageCache();
+    void refreshUpdateBadge();
     void scheduleSave(bool syncAutoStart = false);
     bool flushPendingSave();
 
     AppConfig* config_ = nullptr;
     OcrPackDownloadService* ocrPackDownloads_ = nullptr;
     OfflineResourceService* offlineResources_ = nullptr;
+    UpdateService* updates_ = nullptr;
+    qint64 lastUpdateCheckMs_ = 0;
     QListWidget* nav_ = nullptr;
     QStackedWidget* stack_ = nullptr;
     QTimer* saveTimer_ = nullptr;

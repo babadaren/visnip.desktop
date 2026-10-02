@@ -74,3 +74,36 @@ jobs:
         if: matrix.online == 'OFF'
         shell: pwsh
         run: ./scripts/package-release.ps1 -BuildDir build -OutDir dist -Version ci
+
+      - name: In-app update replaces a packaged installation (end to end)
+        if: matrix.online == 'OFF'
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+          VISNIP_APPLY_UPDATE_QUIET: '1'
+        run: |
+          $package = (Resolve-Path dist/Visnip-ci-windows-x64).Path
+          $list = Get-Content (Join-Path $package 'package-files.txt')
+          if ($list -notcontains 'visnip.exe' -or $list -notcontains 'package-files.txt') { throw 'package-files.txt is incomplete' }
+          # A user folder with a space and Chinese characters, as on many PCs.
+          $root = Join-Path $env:RUNNER_TEMP '更新 测试'
+          $install = Join-Path $root 'install'; $staging = Join-Path $root 'staging'
+          New-Item -ItemType Directory -Force $root | Out-Null
+          Copy-Item -LiteralPath $package -Destination $install -Recurse
+          Copy-Item -LiteralPath $package -Destination $staging -Recurse
+          # Installed: one file the new package drops, plus a user log that must stay.
+          'obsolete' | Set-Content -LiteralPath (Join-Path $install 'obsolete.dll')
+          Add-Content -LiteralPath (Join-Path $install 'package-files.txt') -Value 'obsolete.dll'
+          New-Item -ItemType Directory -Force (Join-Path $install 'logs') | Out-Null
+          'user log' | Set-Content -LiteralPath (Join-Path $install 'logs/keep.txt')
+          'new version marker' | Set-Content -LiteralPath (Join-Path $staging 'README.md')
+          $applier = Start-Process -FilePath (Join-Path $staging 'visnip.exe') -Wait -PassThru -WindowStyle Hidden `
+            -ArgumentList '--apply-update', '--target', "`"$install`"", '--wait-pid', '0'
+          if ($applier.ExitCode -ne 0) { throw "apply-update exited with $($applier.ExitCode)" }
+          if ((Get-Content -LiteralPath (Join-Path $install 'README.md') -Raw) -notmatch 'new version marker') { throw 'files were not replaced' }
+          if (Test-Path -LiteralPath (Join-Path $install 'obsolete.dll')) { throw 'obsolete file was kept' }
+          if (-not (Test-Path -LiteralPath (Join-Path $install 'logs/keep.txt'))) { throw 'user log was removed' }
+          if (Test-Path -LiteralPath (Join-Path $install '.visnip-update-backup')) { throw 'backup folder left behind' }
+          $check = Start-Process -FilePath (Join-Path $install 'visnip.exe') -ArgumentList '--self-test' -Wait -PassThru -WindowStyle Hidden
+          if ($check.ExitCode -ne 0) { throw "updated installation failed --self-test with $($check.ExitCode)" }
+          Write-Host 'In-app update: replaced, removed obsolete file, kept logs, updated copy starts.'

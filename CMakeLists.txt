@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(Visnip
-    VERSION 0.4.2
+    VERSION 0.4.3
     DESCRIPTION "Visnip lightweight screenshot and pin tool"
     LANGUAGES CXX
 )
@@ -23,6 +23,10 @@ option(VISNIP_STRICT_WARNINGS "Treat warnings as errors" OFF)
 option(VISNIP_ONLINE_TRANSLATION "Offer cloud, intranet and hybrid translation modes" OFF)
 set(VISNIP_DEFAULT_SERVICE_URL "" CACHE STRING
     "Default translation service root for online modes; empty means the user enters one")
+# Repository whose GitHub releases the preferences offer as updates; forks set
+# their own, and an empty value builds a client without update checks.
+set(VISNIP_UPDATE_REPOSITORY "babadaren/Visnip.desktop" CACHE STRING
+    "GitHub owner/name that publishes Visnip releases; empty disables updates")
 option(VISNIP_BUILD_TOOLS "Build repository maintenance tools" OFF)
 
 include(CTest)
@@ -39,6 +43,7 @@ endif()
 set(VISNIP_CORE_SOURCES
     src/core/AnnotationModel.cpp
     src/core/AppConfig.cpp
+    src/core/AppUpdate.cpp
     src/core/DesignTokens.cpp
     src/core/LocalTranslation.cpp
     src/core/LongCaptureMatch.cpp
@@ -62,6 +67,7 @@ set(VISNIP_QUESTION_SOURCES
 set(VISNIP_UI_SOURCES
     ${VISNIP_QUESTION_SOURCES}
     src/app/AppController.cpp
+    src/app/UpdateApplier.cpp
     src/platform/HotkeyManager.cpp
     src/platform/WindowCaptureExclusion.cpp
     src/services/FastTranslationDiagnostics.cpp
@@ -73,6 +79,7 @@ set(VISNIP_UI_SOURCES
     src/services/OcrPackDownloadService.cpp
     src/services/OcrService.cpp
     src/services/TextTranslationService.cpp
+    src/services/UpdateService.cpp
     src/ui/IconUtils.cpp
     src/ui/capture/CaptureOverlayWindow.cpp
     src/ui/pin/PinManager.cpp
@@ -89,6 +96,7 @@ target_compile_definitions(visnip_core PUBLIC
     VISNIP_VERSION="${PROJECT_VERSION}"
     VISNIP_ONLINE_TRANSLATION=$<BOOL:${VISNIP_ONLINE_TRANSLATION}>
     VISNIP_DEFAULT_SERVICE_URL="${VISNIP_DEFAULT_SERVICE_URL}"
+    VISNIP_UPDATE_REPOSITORY="${VISNIP_UPDATE_REPOSITORY}"
 )
 
 add_library(visnip_ui STATIC ${VISNIP_UI_SOURCES})
@@ -257,6 +265,12 @@ if(BUILD_TESTING)
     target_link_libraries(visnip_translation_mode_tests PRIVATE visnip_ui Qt6::Test)
     visnip_enable_warnings(tests/tst_translation_modes.cpp)
     add_test(NAME visnip_translation_mode_tests COMMAND visnip_translation_mode_tests)
+    add_executable(visnip_update_tests tests/tst_update.cpp)
+    target_link_libraries(visnip_update_tests PRIVATE visnip_ui Qt6::Test)
+    visnip_enable_warnings(tests/tst_update.cpp)
+    add_test(NAME visnip_update_tests COMMAND visnip_update_tests)
+    set_tests_properties(visnip_update_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     add_executable(visnip_offline_resource_tests tests/tst_offline_resources.cpp resources/visnip_assets.qrc)
     target_link_libraries(visnip_offline_resource_tests PRIVATE visnip_ui Qt6::Test)
     target_compile_definitions(visnip_offline_resource_tests PRIVATE VISNIP_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}/tests")

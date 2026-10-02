@@ -2,6 +2,19 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
+## 0.4.3
+
+### In-app updates
+
+- Opening the preferences asks GitHub for the latest published release. When it is newer, "关于" in the sidebar reads "关于 · 有新版本", and 关于 → 更新 shows the version, its release notes and "立即更新到 x.y.z".
+- The update downloads `Visnip-<version>-windows-x64.zip` from this repository's GitHub release and checks it against GitHub's asset digest and the published `.sha256` file. The download is resumable.
+- Before anything is replaced, the new copy is unpacked into `%LOCALAPPDATA%\Visnip\updates` and must pass `--self-test`. It then waits for the running Visnip to exit, replaces the installation, and starts it again.
+- Only the files of the package list (`package-files.txt`, new in every release package) are replaced or removed. Settings, offline resources, screenshots, `logs/` and any other files stay.
+- Replaced files are moved to a backup folder first. If any step fails, they are restored and the old version starts. An update interrupted half-way is rolled back the next time.
+- Installations in folders without write access (for example Program Files), and builds not run from a release package, show a link to the release instead of updating themselves.
+- The automatic check can be turned off (关于 → 自动检查更新). Development builds only check when "检查更新" is pressed. Forks point `VISNIP_UPDATE_REPOSITORY` at their own repository, or leave it empty to build without update checks.
+- Versions up to 0.4.2 have no updater and need one manual download of 0.4.3.
+
 ## 0.4.2
 
 ### Offline resource management

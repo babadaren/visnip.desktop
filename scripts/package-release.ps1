@@ -1,6 +1,6 @@
 # Builds the redistributable Windows folder and zip from an existing Release build.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\package-release.ps1 -BuildDir build -Version 0.4.1
+#   powershell -ExecutionPolicy Bypass -File scripts\package-release.ps1 -BuildDir build -Version 0.4.3
 #
 # Requirements: windeployqt (Qt bin) and g++ (MinGW bin) on PATH, OCR assets
 # fetched with scripts\fetch_ocr_assets.ps1 before the build was configured.
@@ -55,6 +55,15 @@ Copy-Item -LiteralPath (Join-Path $root 'third_party\onnxruntime\LICENSE') -Dest
 $selfTest = Start-Process -FilePath (Join-Path $package 'visnip.exe') -ArgumentList '--self-test' -Wait -PassThru -WindowStyle Hidden
 if ($selfTest.ExitCode -ne 0) { throw "packaged visnip.exe --self-test failed with $($selfTest.ExitCode)" }
 Remove-Item -LiteralPath (Join-Path $package 'logs') -Recurse -Force -ErrorAction SilentlyContinue
+
+# The in-app updater replaces exactly the files listed here and leaves logs and
+# other files in the installation alone; its presence marks a packaged install.
+$listName = 'package-files.txt'
+$files = Get-ChildItem -LiteralPath $package -Recurse -File |
+    ForEach-Object { $_.FullName.Substring($package.Length + 1).Replace('\', '/') } |
+    Where-Object { $_ -ne $listName } | Sort-Object
+[System.IO.File]::WriteAllText((Join-Path $package $listName), ((@($files) + $listName) -join "`n") + "`n",
+    [System.Text.UTF8Encoding]::new($false))
 
 $zip = Join-Path $output "$name.zip"
 Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue

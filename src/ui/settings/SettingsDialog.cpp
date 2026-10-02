@@ -14,6 +14,7 @@
 #include "services/QuestionAnswerService.h"
 #include "services/ImageTranslationService.h"
 #include "services/TextTranslationService.h"
+#include "services/UpdateService.h"
 #include "ui/IconUtils.h"
 
 #include <QAbstractButton>
@@ -22,6 +23,7 @@
 #include <QButtonGroup>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QFileDialog>
@@ -38,6 +40,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QScrollArea>
+#include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStyle>
@@ -618,6 +621,13 @@ SettingsDialog::SettingsDialog(
     Perf::ScopedTimer timer(QStringLiteral("SettingsDialog.constructor"));
     Q_ASSERT(config_);
     offlineResources_ = new OfflineResourceService(this);
+    updates_ = new UpdateService(this);
+    connect(updates_, &UpdateService::stateChanged, this, [this]() { refreshUpdateBadge(); });
+    connect(updates_, &UpdateService::restartRequired, this, [this]() {
+        flushPendingSave();
+        // The new version waits for this process to exit before it replaces it.
+        QTimer::singleShot(0, qApp, &QCoreApplication::quit);
+    });
     QApplication::setEffectEnabled(Qt::UI_AnimateCombo, false);
 
     setObjectName(QStringLiteral("VisnipSettingsDialog"));
@@ -711,6 +721,29 @@ SettingsDialog::SettingsDialog(
 SettingsDialog::~SettingsDialog()
 {
     flushPendingSave();
+}
+
+void SettingsDialog::showEvent(QShowEvent* event)
+{
+    QDialog::showEvent(event);
+    // Only a packaged installation looks for updates on its own; development
+    // builds and tests check only when the button is pressed.
+    constexpr qint64 kRecheckMs = 6LL * 60 * 60 * 1000;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (config_->settings().checkUpdates && UpdateService::installProblem().isEmpty()
+        && (lastUpdateCheckMs_ == 0 || now - lastUpdateCheckMs_ > kRecheckMs)) {
+        lastUpdateCheckMs_ = now;
+        updates_->check();
+    }
+}
+
+void SettingsDialog::refreshUpdateBadge()
+{
+    if (QListWidgetItem* item = nav_->item(static_cast<int>(Page::About))) {
+        item->setText(updates_->hasUpdate() ? QStringLiteral("关于 · 有新版本") : QStringLiteral("关于"));
+        item->setToolTip(updates_->hasUpdate()
+            ? QStringLiteral("Visnip %1 已发布").arg(updates_->release().version.toString()) : QString());
+    }
 }
 
 void SettingsDialog::closeEvent(QCloseEvent* event)
@@ -2419,8 +2452,124 @@ QWidget* SettingsDialog::createAboutPage()
                   QStringLiteral("配置"),
                   QStringLiteral("设置保存在当前 Windows 用户环境中"),
                   labelWithRole(QStringLiteral("本机"),
-                                QStringLiteral("SettingsRowTitle")),
-                  false);
+                                QStringLiteral("SettingsRowTitle")));
+
+    addSectionTitle(layout, QStringLiteral("更新"));
+    auto* updateStatus = hint(QString());
+    updateStatus->setObjectName(QStringLiteral("VisnipSettingsUpdateStatus"));
+    updateStatus->setWordWrap(true);
+    updateStatus->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(updateStatus);
+    auto* updateProblem = hint(QString());
+    updateProblem->setObjectName(QStringLiteral("VisnipSettingsUpdateProblem"));
+    updateProblem->setWordWrap(true);
+    layout->addWidget(updateProblem);
+    auto* updateNotes = new QLabel;
+    updateNotes->setObjectName(QStringLiteral("VisnipSettingsUpdateNotes"));
+    updateNotes->setWordWrap(true);
+    updateNotes->setTextFormat(Qt::PlainText);
+    updateNotes->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(updateNotes);
+    auto* updateProgress = new QProgressBar;
+    updateProgress->setObjectName(QStringLiteral("VisnipSettingsUpdateProgress"));
+    updateProgress->setRange(0, 1000);
+    updateProgress->setMinimumHeight(22);
+    updateProgress->hide();
+    layout->addWidget(updateProgress);
+    auto* updateActions = new QHBoxLayout;
+    auto* checkUpdate = new QPushButton(QStringLiteral("检查更新"));
+    checkUpdate->setObjectName(QStringLiteral("VisnipSettingsCheckUpdate"));
+    auto* installUpdate = new QPushButton;
+    installUpdate->setObjectName(QStringLiteral("VisnipSettingsInstallUpdate"));
+    setSettingsRole(installUpdate, QStringLiteral("primary"));
+    auto* cancelUpdate = new QPushButton(QStringLiteral("暂停"));
+    cancelUpdate->setObjectName(QStringLiteral("VisnipSettingsCancelUpdate"));
+    for (auto* button : {installUpdate, cancelUpdate, checkUpdate}) {
+        button->setAutoDefault(false);
+        updateActions->addWidget(button);
+    }
+    auto* releaseLink = new QLabel;
+    releaseLink->setObjectName(QStringLiteral("VisnipSettingsUpdateLink"));
+    releaseLink->setOpenExternalLinks(true);
+    releaseLink->setTextFormat(Qt::RichText);
+    updateActions->addWidget(releaseLink);
+    updateActions->addStretch();
+    layout->addLayout(updateActions);
+
+    auto* autoCheck = makeSwitch(config_->settings().checkUpdates, QStringLiteral("自动检查更新"));
+    autoCheck->setObjectName(QStringLiteral("VisnipSettingsAutoCheckUpdates"));
+    connect(autoCheck, &QAbstractButton::toggled, this, [this](bool checked) {
+        config_->mutableSettings().checkUpdates = checked;
+        scheduleSave();
+    });
+    addControlRow(layout,
+                  QStringLiteral("自动检查更新"),
+                  QStringLiteral("打开首选项时向 GitHub 查询新版本，只是一次普通的网页请求，不上传任何数据"),
+                  autoCheck, false);
+
+    const auto refreshUpdate = [this, updateStatus, updateProblem, updateNotes, updateProgress,
+                                checkUpdate, installUpdate, cancelUpdate, releaseLink]() {
+        const auto state = updates_->state();
+        const auto& release = updates_->release();
+        const bool busy = updates_->busyInstalling();
+        const bool offered = state == UpdateService::State::Available || busy
+            || state == UpdateService::State::Restarting;
+        updateStatus->setText(updates_->statusText().isEmpty()
+            ? QStringLiteral("当前版本 %1。点击“检查更新”查询 GitHub 上的新版本。").arg(QStringLiteral(VISNIP_VERSION))
+            : updates_->statusText());
+        const QString problem = offered ? UpdateService::installProblem() : QString();
+        updateProblem->setText(problem);
+        updateProblem->setVisible(!problem.isEmpty());
+        QString notes;
+        if (offered) {
+            // Release notes are Markdown; headings and emphasis are shown as plain text.
+            for (QString line : release.notes.split(QLatin1Char('\n'))) {
+                line = line.trimmed();
+                while (line.startsWith(QLatin1Char('#'))) line.remove(0, 1);
+                notes += line.replace(QStringLiteral("**"), QString()).trimmed() + QLatin1Char('\n');
+            }
+            notes = notes.trimmed();
+            if (notes.size() > 700) notes = notes.left(700) + QStringLiteral("…");
+        }
+        updateNotes->setText(notes);
+        updateNotes->setVisible(!notes.isEmpty());
+        updateProgress->setVisible(state == UpdateService::State::Downloading);
+        installUpdate->setText(busy ? QStringLiteral("正在更新…")
+            : QStringLiteral("立即更新到 %1").arg(release.version.toString()));
+        installUpdate->setVisible(offered);
+        installUpdate->setEnabled(state == UpdateService::State::Available && problem.isEmpty());
+        cancelUpdate->setVisible(state == UpdateService::State::Downloading);
+        checkUpdate->setEnabled(!busy && state != UpdateService::State::Checking
+                                && state != UpdateService::State::Restarting);
+        const QUrl page = release.page.isValid() ? release.page : AppUpdate::releasesPage();
+        releaseLink->setText(page.isValid()
+            ? QStringLiteral("<a href=\"%1\">%2</a>").arg(page.toString(QUrl::FullyEncoded).toHtmlEscaped(),
+                  offered ? QStringLiteral("在 GitHub 查看") : QStringLiteral("所有版本"))
+            : QString());
+    };
+    connect(updates_, &UpdateService::stateChanged, page, refreshUpdate);
+    connect(updates_, &UpdateService::progress, page, [updateProgress](qint64 received, qint64 total) {
+        if (total <= 0) return;
+        updateProgress->setValue(int(qBound<qint64>(0LL, received * 1000 / total, 1000LL)));
+        updateProgress->setFormat(QStringLiteral("%1 / %2 MiB · %p%")
+            .arg(received / 1048576.0, 0, 'f', 1).arg(total / 1048576.0, 0, 'f', 1));
+    });
+    connect(checkUpdate, &QPushButton::clicked, page, [this]() {
+        lastUpdateCheckMs_ = QDateTime::currentMSecsSinceEpoch();
+        updates_->check();
+    });
+    connect(installUpdate, &QPushButton::clicked, page, [this]() {
+        const auto& release = updates_->release();
+        const auto answer = QMessageBox::question(this, QStringLiteral("更新 Visnip"),
+            QStringLiteral("将从 GitHub 下载 Visnip %1（%2 MiB），核对 SHA-256 并确认新版本能在这台电脑上启动后，"
+                           "Visnip 会关闭、替换为新版本并自动重新打开。\n\n"
+                           "设置、离线资源和截图都会保留。更新失败会恢复当前版本。")
+                .arg(release.version.toString()).arg(release.packageSize / 1048576.0, 0, 'f', 1),
+            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
+        if (answer == QMessageBox::Yes) updates_->install();
+    });
+    connect(cancelUpdate, &QPushButton::clicked, page, [this]() { updates_->cancel(); });
+    refreshUpdate();
     layout->addStretch();
     return page;
 }

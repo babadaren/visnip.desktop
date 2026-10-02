@@ -377,6 +377,7 @@ void AppConfig::load()
     migrateLegacyInstallation(s);
     s.beginGroup(QStringLiteral("general"));
     settings_.autoStart = s.value(QStringLiteral("autoStart"), defaults.autoStart).toBool();
+    settings_.checkUpdates = s.value(QStringLiteral("checkUpdates"), defaults.checkUpdates).toBool();
     s.endGroup();
 
     s.beginGroup(QStringLiteral("ui"));
@@ -563,6 +564,7 @@ bool AppConfig::save()
     auto s = makeSettings();
     s.beginGroup(QStringLiteral("general"));
     s.setValue(QStringLiteral("autoStart"), settings_.autoStart);
+    s.setValue(QStringLiteral("checkUpdates"), settings_.checkUpdates);
     s.endGroup();
 
     s.beginGroup(QStringLiteral("ui"));

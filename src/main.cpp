@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "app/UpdateApplier.h"
 #include "core/AnnotationModel.h"
 #include "core/DesignTokens.h"
 #include "core/PerfLog.h"
@@ -87,7 +88,18 @@ int main(int argc, char* argv[])
     parser.addVersionOption();
     QCommandLineOption selfTest(QStringLiteral("self-test"), QStringLiteral("Run a non-interactive smoke test and exit."));
     parser.addOption(selfTest);
+    // Used by the update in the preferences; the new version applies itself.
+    QCommandLineOption applyUpdate(QStringLiteral("apply-update"), QStringLiteral("Replace the installation in --target with this copy."));
+    QCommandLineOption updateTarget(QStringLiteral("target"), QStringLiteral("Installation directory to update."), QStringLiteral("directory"));
+    QCommandLineOption waitPid(QStringLiteral("wait-pid"), QStringLiteral("Process to wait for before updating."), QStringLiteral("pid"));
+    parser.addOption(applyUpdate);
+    parser.addOption(updateTarget);
+    parser.addOption(waitPid);
     parser.process(app);
+
+    if (parser.isSet(applyUpdate)) {
+        return Visnip::runUpdateApplier(parser.value(updateTarget), parser.value(waitPid).toLongLong());
+    }
 
     if (parser.isSet(selfTest)) {
         Visnip::Perf::log(QStringLiteral("main.self_test.start"));

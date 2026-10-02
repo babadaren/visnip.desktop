@@ -203,6 +203,8 @@ struct QuestionSettings {
 
 struct AppSettings {
     bool autoStart = false;
+    // Ask GitHub for a newer release when the preferences open.
+    bool checkUpdates = true;
     UiSettings ui;
     CaptureSettings capture;
     PinSettings pin;

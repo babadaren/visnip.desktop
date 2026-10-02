@@ -1468,11 +1468,22 @@ QWidget* SettingsDialog::createTranslationPage()
     offlineFiles->setOpenExternalLinks(true);
     offlineFiles->setMinimumWidth(0);
     offlineLayout->addWidget(offlineFiles);
+    auto* openOfflineFiles = new QPushButton(QStringLiteral("打开文件目录"));
+    openOfflineFiles->setObjectName(QStringLiteral("VisnipSettingsOfflineOpenFolder"));
+    openOfflineFiles->setAutoDefault(false);
+    setSettingsRole(openOfflineFiles, QStringLiteral("secondary"));
     auto* deleteOffline = new QPushButton(QStringLiteral("删除已下载资源"));
     deleteOffline->setObjectName(QStringLiteral("VisnipSettingsOfflineDelete"));
     deleteOffline->setAutoDefault(false);
     setSettingsRole(deleteOffline, QStringLiteral("danger"));
-    offlineLayout->addWidget(deleteOffline, 0, Qt::AlignLeft);
+    auto* offlineFileActions = new QHBoxLayout;
+    offlineFileActions->setContentsMargins(0,0,0,0);
+    offlineFileActions->setSpacing(8);
+    offlineFileActions->addWidget(openOfflineFiles);
+    offlineFileActions->addWidget(deleteOffline);
+    offlineFileActions->addStretch();
+    offlineLayout->addLayout(offlineFileActions);
+    openOfflineFiles->hide();
     deleteOffline->hide();
     auto* resources = offlineResources_;
     auto* localTest = new OfflineTranslationService(page);
@@ -1490,14 +1501,11 @@ QWidget* SettingsDialog::createTranslationPage()
             html += QStringLiteral("<p style=\"margin:0 0 10px 0\"><b>%1</b> · %2 · %3<br/>")
                 .arg(file.label.toHtmlEscaped(), readableBytes(file.size),
                      installed ? QStringLiteral("已下载") : QStringLiteral("未下载"));
-            if (installed) {
-                html += QStringLiteral("本地文件：%1<br/>").arg(QDir::toNativeSeparators(path).toHtmlEscaped());
-            }
             html += QStringLiteral("</p>");
         }
         return html;
     };
-    const auto refreshOfflineFiles = [offlineFiles, deleteOffline, describeOfflineFiles, offlineRootDirectory,
+    const auto refreshOfflineFiles = [offlineFiles, openOfflineFiles, deleteOffline, describeOfflineFiles, offlineRootDirectory,
                                       selectedQuality]() {
         offlineFiles->setVisible(selectedQuality() == QStringLiteral("lite"));
         offlineFiles->setText(describeOfflineFiles());
@@ -1508,6 +1516,7 @@ QWidget* SettingsDialog::createTranslationPage()
                 if (QFileInfo::exists(QDir(root).filePath(file.target))) { installed = true; break; }
             }
         }
+        openOfflineFiles->setVisible(installed);
         deleteOffline->setVisible(installed);
     };
     const auto refreshOffline = [offlineRootDirectory, offlineStatus, resources, testOffline, downloadOffline,
@@ -1526,10 +1535,11 @@ QWidget* SettingsDialog::createTranslationPage()
                         : QStringLiteral("轻量离线资源尚未就绪。点击“下载并启用”，客户端将从官方渠道下载约 1.1 GiB 并逐个核对 SHA-256。"))
                     : QStringLiteral("精细离线资源不完整，而且没有官方发布渠道可以重新下载。请改用“轻量”，或继续使用已安装好的精细资源。")));
     };
-    const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,deleteOffline,methodGroup,offlineQuality,
-                               selectedQuality,offlineRootDirectory](bool busy) {
+    const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,openOfflineFiles,deleteOffline,methodGroup,
+                               offlineQuality,selectedQuality,offlineRootDirectory](bool busy) {
         downloadOffline->setEnabled(!busy); cancelOffline->setEnabled(busy);
         testOffline->setEnabled(!busy && OfflineTranslationService::resourceProblem(offlineRootDirectory(),selectedQuality()).isEmpty());
+        openOfflineFiles->setEnabled(!busy);
         deleteOffline->setEnabled(!busy);
         offlineQuality->setEnabled(!busy);
         for (auto* button : methodGroup->buttons()) button->setEnabled(!busy);
@@ -1617,15 +1627,18 @@ QWidget* SettingsDialog::createTranslationPage()
         }
         if (auto* remote=findChild<QWidget*>(QStringLiteral("VisnipSettingsRemotePanel"))) remote->hide();
         resourceProgress->hide(); phaseLabel->clear();
-        offlineStatus->setText(QStringLiteral("已启用%1离线翻译，自检 %2 秒。资源文件位于 %3。现在可直接截图翻译，图片和文字不上传。")
-            .arg(quality==QStringLiteral("lite") ? QStringLiteral("轻量") : QStringLiteral("精细"))
-            .arg(ms/1000.0,0,'f',1).arg(QDir::toNativeSeparators(root)));
+        offlineStatus->setText(QStringLiteral("已启用%1离线翻译，自检 %2 秒。需要时可在上面“打开文件目录”。现在可直接截图翻译，图片和文字不上传。")
+            .arg(quality==QStringLiteral("lite") ? QStringLiteral("轻量") : QStringLiteral("精细")).arg(ms/1000.0,0,'f',1));
     };
     connect(resources, &OfflineResourceService::succeeded, page, [activateOffline](const QString& root,const QString& quality,qint64 ms) {
         if (quality==QStringLiteral("precise") || quality==QStringLiteral("lite")) activateOffline(root,quality,ms);
     });
     connect(resources, &OfflineResourceService::failed, page, [resourceProgress,phaseLabel](const QString&) {resourceProgress->hide();phaseLabel->clear();});
     connect(resources, &OfflineResourceService::cancelled, page, [resourceProgress,phaseLabel]() {resourceProgress->hide();phaseLabel->clear();});
+    connect(openOfflineFiles, &QPushButton::clicked, page, [offlineRootDirectory]() {
+        const QString root=offlineRootDirectory();
+        if (!root.isEmpty() && QFileInfo(root).isDir()) QDesktopServices::openUrl(QUrl::fromLocalFile(root));
+    });
     connect(deleteOffline, &QPushButton::clicked, page, [this,offlineRootDirectory,refreshOffline,offlineStatus]() {
         const QString root=offlineRootDirectory();
         qint64 planned=0;

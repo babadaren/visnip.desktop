@@ -438,15 +438,18 @@ private slots:
         dialog.showPage(SettingsDialog::Page::Translation);
         dialog.show(); QTest::qWait(50);
 
-        // The page lists every installed file with its local path; the download
-        // address is deliberately not shown.
+        // The list names the installed files and their state. Neither the
+        // download address nor the local path is printed: the folder is opened
+        // through its own button instead.
         auto* files = dialog.findChild<QLabel*>(QStringLiteral("VisnipSettingsOfflineFiles")); QVERIFY(files);
-        QVERIFY(files->text().contains(QDir::toNativeSeparators(QDir(root).filePath(QStringLiteral("llama")))));
-        QVERIFY(files->text().contains(QDir::toNativeSeparators(
-            QDir(root).filePath(QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf")))));
-        QVERIFY(!files->text().contains(QStringLiteral("http")));
+        QVERIFY(files->text().contains(QStringLiteral("llama.cpp")));
+        QVERIFY(files->text().contains(QStringLiteral("Hy-MT2-1.8B")));
         QVERIFY(files->text().contains(QStringLiteral("已下载")));
+        QVERIFY(!files->text().contains(QStringLiteral("http")));
+        QVERIFY(!files->text().contains(QDir::toNativeSeparators(root)));
         QVERIFY(!dialog.findChild<QLineEdit*>(QStringLiteral("VisnipSettingsOfflineDirectory")));
+        auto* open = dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineOpenFolder")); QVERIFY(open);
+        QVERIFY(open->isVisibleTo(&dialog) && open->isEnabled());
         auto* remove = dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineDelete")); QVERIFY(remove);
         QVERIFY(remove->isVisibleTo(&dialog));
         const auto qaImage = qEnvironmentVariable("VISNIP_SETTINGS_QA_DELETE_IMAGE");
@@ -471,6 +474,7 @@ private slots:
         QVERIFY(!QFileInfo::exists(QDir(cache).filePath(QStringLiteral("download.zip"))));
         QVERIFY(config.settings().aiTranslate.offlineResourceDirectory.isEmpty());
         QVERIFY(!remove->isVisibleTo(&dialog));
+        QVERIFY(!open->isVisibleTo(&dialog));
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
     }
     void rateLimitPageNeverBecomesPackageBytes() {

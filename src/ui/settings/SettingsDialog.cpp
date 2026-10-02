@@ -1485,17 +1485,15 @@ QWidget* SettingsDialog::createTranslationPage()
         const QString root = offlineRootDirectory();
         QString html;
         for (const auto& file : OfflineResourceCatalog::liteFiles()) {
-            const bool installed = !root.isEmpty() && QFileInfo::exists(QDir(root).filePath(file.target));
+            const QString path = root.isEmpty() ? QString() : QDir(root).filePath(file.target);
+            const bool installed = !path.isEmpty() && QFileInfo::exists(path);
             html += QStringLiteral("<p style=\"margin:0 0 10px 0\"><b>%1</b> · %2 · %3<br/>")
                 .arg(file.label.toHtmlEscaped(), readableBytes(file.size),
                      installed ? QStringLiteral("已下载") : QStringLiteral("未下载"));
-            for (int source = 0; source < file.sources.size(); ++source) {
-                const QString address = file.sources.at(source).toString().toHtmlEscaped();
-                html += QStringLiteral("%1：<a href=\"%2\">%2</a><br/>")
-                    .arg(source == 0 ? QStringLiteral("下载地址") : QStringLiteral("备用地址"), address);
+            if (installed) {
+                html += QStringLiteral("本地文件：%1<br/>").arg(QDir::toNativeSeparators(path).toHtmlEscaped());
             }
-            html += QStringLiteral("安装位置：%1 · SHA-256 %2…</p>")
-                .arg(file.target.toHtmlEscaped(), QString::fromLatin1(file.sha256.left(16)));
+            html += QStringLiteral("</p>");
         }
         return html;
     };
@@ -1619,8 +1617,9 @@ QWidget* SettingsDialog::createTranslationPage()
         }
         if (auto* remote=findChild<QWidget*>(QStringLiteral("VisnipSettingsRemotePanel"))) remote->hide();
         resourceProgress->hide(); phaseLabel->clear();
-        offlineStatus->setText(QStringLiteral("已启用%1离线翻译，自检 %2 秒。现在可直接截图翻译，图片和文字不上传。")
-            .arg(quality==QStringLiteral("lite") ? QStringLiteral("轻量") : QStringLiteral("精细")).arg(ms/1000.0,0,'f',1));
+        offlineStatus->setText(QStringLiteral("已启用%1离线翻译，自检 %2 秒。资源文件位于 %3。现在可直接截图翻译，图片和文字不上传。")
+            .arg(quality==QStringLiteral("lite") ? QStringLiteral("轻量") : QStringLiteral("精细"))
+            .arg(ms/1000.0,0,'f',1).arg(QDir::toNativeSeparators(root)));
     };
     connect(resources, &OfflineResourceService::succeeded, page, [activateOffline](const QString& root,const QString& quality,qint64 ms) {
         if (quality==QStringLiteral("precise") || quality==QStringLiteral("lite")) activateOffline(root,quality,ms);

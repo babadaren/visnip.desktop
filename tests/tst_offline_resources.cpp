@@ -438,11 +438,13 @@ private slots:
         dialog.showPage(SettingsDialog::Page::Translation);
         dialog.show(); QTest::qWait(50);
 
-        // The page lists every installed file with the publisher address it came from.
+        // The page lists every installed file with its local path; the download
+        // address is deliberately not shown.
         auto* files = dialog.findChild<QLabel*>(QStringLiteral("VisnipSettingsOfflineFiles")); QVERIFY(files);
-        QVERIFY(files->text().contains(QStringLiteral("github.com")));
-        QVERIFY(files->text().contains(QStringLiteral("modelscope.cn")));
-        QVERIFY(files->text().contains(QStringLiteral("huggingface.co")));
+        QVERIFY(files->text().contains(QDir::toNativeSeparators(QDir(root).filePath(QStringLiteral("llama")))));
+        QVERIFY(files->text().contains(QDir::toNativeSeparators(
+            QDir(root).filePath(QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf")))));
+        QVERIFY(!files->text().contains(QStringLiteral("http")));
         QVERIFY(files->text().contains(QStringLiteral("已下载")));
         QVERIFY(!dialog.findChild<QLineEdit*>(QStringLiteral("VisnipSettingsOfflineDirectory")));
         auto* remove = dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineDelete")); QVERIFY(remove);

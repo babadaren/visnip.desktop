@@ -74,9 +74,10 @@ private:
     LocalTextTranslationService* liteTest_ = nullptr;
     QPointer<QProcess> extractor_;
     QTimer extractTimeout_;
-    // Aborts an attempt that stops delivering bytes so the next source or retry
-    // takes over without the user having to pause and restart by hand.
-    QTimer stallTimeout_;
+    // Watches the delivered bytes: an attempt that dries up or trickles is
+    // handed to the retry or fallback source without a manual pause.
+    QTimer transferCheck_;
+    qint64 healthyBytes_ = 0;
     QByteArray pendingHead_;
     std::unique_ptr<QLockFile> lock_;
     QFile output_;

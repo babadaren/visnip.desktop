@@ -24,9 +24,11 @@ namespace {
 constexpr qint64 reserveBytes = 1024LL * 1024 * 1024;
 constexpr int kMaxRetriesPerSource = 3;
 constexpr int kExtractTimeoutMs = 3 * 60 * 1000;
-// The network transfer timeout is 90 s; this fires earlier and hands the file
-// to the retry or fallback source instead of leaving the page stuck.
-constexpr int kStallTimeoutMs = 40 * 1000;
+// The network transfer timeout is 90 s and only notices a silent socket. This
+// check also rejects a trickle, so a dying source is handed to the retry or
+// fallback source within one window instead of looking stuck for minutes.
+constexpr int kTransferCheckMs = 20 * 1000;
+constexpr qint64 kTransferMinimumBytes = 256 * 1024;
 const QString kReceipt = QStringLiteral("vislate-managed.json");
 class ResourceProxyFactory final : public QNetworkProxyFactory {
 public:
@@ -97,11 +99,20 @@ OfflineResourceService::OfflineResourceService(QObject* parent) : QObject(parent
     connect(&extractTimeout_, &QTimer::timeout, this, [this]() {
         if (busy_ && extractor_) fail(QStringLiteral("解压 llama.cpp 超时，已停止，没有启用。"));
     });
-    stallTimeout_.setSingleShot(true);
-    stallTimeout_.setInterval(kStallTimeoutMs);
-    connect(&stallTimeout_, &QTimer::timeout, this, [this]() {
+    transferCheck_.setInterval(kTransferCheckMs);
+    connect(&transferCheck_, &QTimer::timeout, this, [this]() {
         if (!busy_ || !reply_) return;
-        status(QStringLiteral("下载停顿超过 %1 秒，正在重试或切换下载源…").arg(kStallTimeoutMs / 1000));
+        const qint64 delivered = completedBytes_ + output_.pos() - healthyBytes_;
+        if (delivered >= kTransferMinimumBytes) {
+            healthyBytes_ = completedBytes_ + output_.pos();
+            const double kbps = delivered / 1024.0 / (kTransferCheckMs / 1000.0);
+            status(QStringLiteral("正在下载 %1：最近 %2 秒 %3 KB/s（进度快照 %4 MiB）")
+                .arg(plan_.at(index_).label).arg(kTransferCheckMs / 1000).arg(kbps,0,'f',0)
+                .arg((completedBytes_ + output_.pos()) / double(1024 * 1024),0,'f',1));
+            return;
+        }
+        status(QStringLiteral("下载停顿：最近 %1 秒只收到 %2 KB，正在重试或切换下载源…")
+            .arg(kTransferCheckMs / 1000).arg(delivered / double(1024),0,'f',0));
         reply_->abort(); // finished() decides between a retry and the next source
     });
     connect(liteTest_, &LocalTextTranslationService::phaseChanged, this, [this](const QString& phase) {
@@ -192,7 +203,7 @@ void OfflineResourceService::status(const QString& text) { status_ = text; emit 
 void OfflineResourceService::reject(const QString& message) { status(message); emit failed(message); }
 void OfflineResourceService::releaseReply()
 {
-    stallTimeout_.stop();
+    transferCheck_.stop();
     pendingHead_.clear();
     if (!reply_) return;
     QNetworkReply* reply = reply_.data(); reply_.clear();
@@ -358,7 +369,8 @@ void OfflineResourceService::requestFile()
     emit progress(completedBytes_ + offset_, totalBytes_);
     reply_ = network_->get(request); reply_->setReadBufferSize(1024 * 1024);
     pendingHead_.clear();
-    stallTimeout_.start();
+    healthyBytes_ = completedBytes_ + output_.pos();
+    transferCheck_.start();
     connect(reply_, &QNetworkReply::redirected, this, [this](const QUrl& target) {
         if (!reply_) return;
         if (OfflineResourceCatalog::isAllowedDownload(target)) { emit reply_->redirectAllowed(); return; }
@@ -370,7 +382,6 @@ void OfflineResourceService::requestFile()
 void OfflineResourceService::readFile()
 {
     if (!reply_ || !busy_ || redirectRejected_ || badResponse_) return;
-    stallTimeout_.start(); // any delivered byte means the transfer is alive
     const qint64 size = plan_[index_].size;
     if (!headersChecked_) {
         const int http = reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

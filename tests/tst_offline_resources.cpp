@@ -552,7 +552,7 @@ private slots:
         service.cacheRoot_ = temp.path();
         service.plan_ = OfflineResourceCatalog::liteFiles();
         service.index_ = 0; service.source_ = 0;
-        service.stallTimeout_.setInterval(150); // keep the test quick
+        service.transferCheck_.setInterval(150); // keep the test quick
         QSignalSpy failed(&service, &OfflineResourceService::failed);
         QSignalSpy status(&service, &OfflineResourceService::statusChanged);
         service.requestFile();

@@ -25,13 +25,18 @@ public:
     bool isBusy() const { return busy_; }
     QString statusText() const { return status_; }
     QString targetQuality() const { return quality_; }
-    static QString cacheDirectory();
-    void prepare(const QString& quality);
+    // Base folder that holds the download cache and the managed installations.
+    // An empty value selects the default location in the user's local app data.
+    static QString defaultStorageDirectory();
+    static QString storageDirectory(const QString& configured = QString());
+    static QString cacheDirectory(const QString& configured = QString());
+    void prepare(const QString& quality, const QString& storageDirectory = QString());
     void installApproved();
     void cancel();
     // Removes the installed lite files, the enable receipt and the downloaded
     // archives. The caller owns the user-visible confirmation.
-    static bool removeInstalled(const QString& root, QString* error = nullptr);
+    static bool removeInstalled(const QString& root, const QString& storageRoot = QString(),
+                                QString* error = nullptr);
 signals:
     void busyChanged(bool busy);
     void statusChanged(const QString& status);

@@ -16,6 +16,7 @@
 #include <QNetworkProxyQuery>
 #include <QSaveFile>
 #include <QStorageInfo>
+#include <QThread>
 #include <QtConcurrent/QtConcurrentRun>
 
 namespace Visnip {
@@ -123,11 +124,20 @@ void OfflineResourceService::recordActivation(qint64 ms)
     finish(); emit succeeded(directory, quality, ms);
 }
 OfflineResourceService::~OfflineResourceService() { finish(); }
-QString OfflineResourceService::cacheDirectory()
+QString OfflineResourceService::defaultStorageDirectory()
 {
-    return QDir::cleanPath(QDir(OfflineTranslationService::defaultResourceDirectory()).absoluteFilePath(QStringLiteral("../downloads")));
+    return QDir::cleanPath(QDir(OfflineTranslationService::defaultResourceDirectory()).absoluteFilePath(QStringLiteral("..")));
 }
-bool OfflineResourceService::removeInstalled(const QString& root, QString* error)
+QString OfflineResourceService::storageDirectory(const QString& configured)
+{
+    const QString trimmed = configured.trimmed();
+    return trimmed.isEmpty() ? defaultStorageDirectory() : QDir::cleanPath(trimmed);
+}
+QString OfflineResourceService::cacheDirectory(const QString& configured)
+{
+    return QDir(storageDirectory(configured)).absoluteFilePath(QStringLiteral("downloads"));
+}
+bool OfflineResourceService::removeInstalled(const QString& root, const QString& storageRoot, QString* error)
 {
     const auto reject = [error](const QString& message) {
         if (error) *error = message;
@@ -135,18 +145,28 @@ bool OfflineResourceService::removeInstalled(const QString& root, QString* error
     };
     const QString directory = QDir::cleanPath(root);
     if (directory.isEmpty()) return reject(QStringLiteral("没有已下载的离线资源。"));
-    for (const auto& file : OfflineResourceCatalog::liteFiles()) {
-        const QString path = QDir(directory).filePath(file.target);
-        const QFileInfo info(path);
-        if (!info.exists() && !info.isSymLink()) continue;
-        const bool removed = info.isDir() ? QDir(path).removeRecursively() : QFile::remove(path);
-        if (!removed) return reject(QStringLiteral("无法删除 %1，文件可能正在使用。").arg(file.target));
+    // An offline engine that is still shutting down keeps its executables open,
+    // so give it a moment instead of failing the whole deletion.
+    QString stuck;
+    for (int attempt = 0; attempt < 4; ++attempt) {
+        if (attempt) QThread::msleep(400);
+        stuck.clear();
+        for (const auto& file : OfflineResourceCatalog::liteFiles()) {
+            const QString path = QDir(directory).filePath(file.target);
+            const QFileInfo info(path);
+            if (!info.exists() && !info.isSymLink()) continue;
+            const bool removed = info.isDir() ? QDir(path).removeRecursively() : QFile::remove(path);
+            if (!removed) { stuck = file.target; break; }
+        }
+        if (stuck.isEmpty()) break;
     }
+    if (!stuck.isEmpty()) return reject(QStringLiteral("无法删除 %1：离线翻译进程仍在占用它，请退出翻译后重试。").arg(stuck));
     QFile::remove(QDir(directory).filePath(kReceipt));
     QDir(directory).rmdir(QStringLiteral("models")); // only succeeds when empty
     QDir().rmdir(directory);
     // The archives are only useful for reinstalling the exact same files.
-    QDir cache(cacheDirectory());
+    // The archives live in the configured storage root, not next to the install.
+    QDir cache(cacheDirectory(storageRoot));
     if (cache.exists()) {
         const auto entries = cache.entryInfoList(QDir::Files | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
         for (const auto& entry : entries) {
@@ -188,7 +208,7 @@ void OfflineResourceService::cancel()
     status(QStringLiteral("已暂停资源准备；已下载的部分保留，下次点击可继续。没有启用未完成的资源。"));
     finish(); emit cancelled();
 }
-void OfflineResourceService::prepare(const QString& quality)
+void OfflineResourceService::prepare(const QString& quality, const QString& storageDirectory)
 {
     if (busy_) return;
     if (quality != QStringLiteral("lite")) {
@@ -198,6 +218,7 @@ void OfflineResourceService::prepare(const QString& quality)
     // Checked first so nobody downloads 1 GiB that cannot run on this computer.
     const QString runtime = LocalTextTranslationService::runtimeProblem();
     if (!runtime.isEmpty()) { reject(runtime); return; }
+    cacheRoot_ = OfflineResourceService::cacheDirectory(storageDirectory);
     if (!plainDirectory(cacheRoot_)) { reject(QStringLiteral("无法创建安全的资源缓存目录。")); return; }
     lock_ = std::make_unique<QLockFile>(QDir(cacheRoot_).filePath(QStringLiteral("install.lock")));
     lock_->setStaleLockTime(0);

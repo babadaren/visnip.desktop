@@ -117,6 +117,9 @@ struct AiTranslateSettings {
     int cloudUploadConsent = 0;
     int intranetUploadConsent = 0;
     QString offlineResourceDirectory;
+    // Base folder for offline downloads and managed installations. Empty keeps
+    // the default location under the user's local application data.
+    QString offlineStorageDirectory;
     // "lite": local OCR + llama.cpp text translation + in-process refill.
     // "precise": the Python whole-image engine (Hi-SAM, LaMa, PyTorch).
     QString offlineQuality = QStringLiteral("lite");

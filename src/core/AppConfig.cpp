@@ -499,6 +499,7 @@ void AppConfig::load()
     settings_.aiTranslate.intranetServiceToken =
         secretFromStorage(s.value(QStringLiteral("intranetServiceToken")).toString()).trimmed();
     settings_.aiTranslate.offlineResourceDirectory = s.value(QStringLiteral("offlineResourceDirectory")).toString().trimmed();
+    settings_.aiTranslate.offlineStorageDirectory = s.value(QStringLiteral("offlineStorageDirectory")).toString().trimmed();
     // "basic" was the earlier name of the resource package that the lite tier
     // runs from. Unknown values select the lite tier, which needs no Python.
     // Earlier clients stored "precise" for everyone; without an installed
@@ -643,6 +644,7 @@ bool AppConfig::save()
     s.setValue(QStringLiteral("cloudServiceToken"), protectSecretForStorage(settings_.aiTranslate.cloudServiceToken));
     s.setValue(QStringLiteral("intranetServiceToken"), protectSecretForStorage(settings_.aiTranslate.intranetServiceToken));
     s.setValue(QStringLiteral("offlineResourceDirectory"), settings_.aiTranslate.offlineResourceDirectory);
+    s.setValue(QStringLiteral("offlineStorageDirectory"), settings_.aiTranslate.offlineStorageDirectory);
     s.setValue(QStringLiteral("offlineQuality"), settings_.aiTranslate.offlineQuality);
     s.setValue(QStringLiteral("baiduAppId"), settings_.aiTranslate.baiduAppId);
     s.setValue(QStringLiteral("baiduSecretKey"), protectSecretForStorage(settings_.aiTranslate.baiduSecretKey));

@@ -26,6 +26,12 @@
 #include <QPainter>
 #include <QStandardPaths>
 #include <QtTest>
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace Visnip {
 namespace {
@@ -433,10 +439,23 @@ private slots:
         AppConfig config;
         config.mutableSettings().aiTranslate.offlineResourceDirectory = root;
         config.mutableSettings().aiTranslate.offlineQuality = QStringLiteral("lite");
+        const QString customStorage = temp.filePath(QStringLiteral("custom-storage"));
+        config.mutableSettings().aiTranslate.offlineStorageDirectory = customStorage;
         SettingsDialog dialog(&config);
         dialog.resize(840,620);
         dialog.showPage(SettingsDialog::Page::Translation);
         dialog.show(); QTest::qWait(50);
+
+        // The download location is selectable and can be reset to the default.
+        auto* storagePath = dialog.findChild<QLineEdit*>(QStringLiteral("VisnipSettingsOfflineStoragePath")); QVERIFY(storagePath);
+        QCOMPARE(storagePath->text(), QDir::toNativeSeparators(customStorage));
+        auto* storageChoose = dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineStorageChoose"));
+        QVERIFY(storageChoose && storageChoose->isEnabled());
+        auto* storageReset = dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineStorageReset")); QVERIFY(storageReset);
+        QVERIFY(storageReset->isEnabled());
+        storageReset->click(); QTest::qWait(10);
+        QCOMPARE(storagePath->text(), QDir::toNativeSeparators(OfflineResourceService::storageDirectory()));
+        QVERIFY(config.settings().aiTranslate.offlineStorageDirectory.isEmpty());
 
         // The list names the installed files and their state. Neither the
         // download address nor the local path is printed: the folder is opened
@@ -475,6 +494,26 @@ private slots:
         QVERIFY(config.settings().aiTranslate.offlineResourceDirectory.isEmpty());
         QVERIFY(!remove->isVisibleTo(&dialog));
         QVERIFY(!open->isVisibleTo(&dialog));
+
+        // A file a shutting-down engine still holds open is retried, reported
+        // with its name, and removed once the handle is gone.
+#ifdef Q_OS_WIN
+        const QString busyRoot = temp.filePath(QStringLiteral("busy-root"));
+        QVERIFY(QDir().mkpath(QDir(busyRoot).filePath(QStringLiteral("llama"))));
+        QVERIFY(QDir().mkpath(QDir(busyRoot).filePath(QStringLiteral("models"))));
+        const QString busyModel = QDir(busyRoot).filePath(QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf"));
+        { QFile file(busyModel); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("x"); }
+        HANDLE lock = CreateFileW(reinterpret_cast<const wchar_t*>(QDir::toNativeSeparators(busyModel).utf16()),
+                                  GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+        QVERIFY(lock != INVALID_HANDLE_VALUE);
+        QString busyError;
+        QVERIFY(!OfflineResourceService::removeInstalled(busyRoot, QString(), &busyError));
+        QVERIFY2(busyError.contains(QStringLiteral("Hy-MT2-1.8B-Q4_K_M.gguf")), qPrintable(busyError));
+        CloseHandle(lock);
+        QString retryError;
+        QVERIFY2(OfflineResourceService::removeInstalled(busyRoot, QString(), &retryError), qPrintable(retryError));
+        QVERIFY(!QFileInfo::exists(busyModel));
+#endif
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
     }
     void rateLimitPageNeverBecomesPackageBytes() {

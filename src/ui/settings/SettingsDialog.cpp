@@ -1428,6 +1428,28 @@ QWidget* SettingsDialog::createTranslationPage()
             : QStringLiteral("当前支持中英文，文字翻译优先使用可用显卡。简单背景直接分析文字笔画，复杂区域才加载 Hi-SAM 和修复模型。资源约 6 GiB，模型就绪后连续截图无需重复加载，空闲 5 分钟后释放。首次显卡预热可能较慢。翻译不上传截图或文字。"));
     };
     updateOfflineSummary();
+    // Downloads and managed installations land under this folder; the default
+    // keeps everything inside the user's local application data.
+    auto* storageRow = new QHBoxLayout;
+    storageRow->setContentsMargins(0,0,0,0);
+    storageRow->setSpacing(8);
+    auto* storageTitle = new QLabel(QStringLiteral("下载位置"));
+    storageTitle->setObjectName(QStringLiteral("VisnipSettingsOfflineStorageLabel"));
+    auto* storagePath = new QLineEdit;
+    storagePath->setObjectName(QStringLiteral("VisnipSettingsOfflineStoragePath"));
+    storagePath->setReadOnly(true);
+    storagePath->setMinimumWidth(260);
+    auto* storageChoose = new QPushButton(QStringLiteral("选择文件夹…"));
+    storageChoose->setObjectName(QStringLiteral("VisnipSettingsOfflineStorageChoose"));
+    storageChoose->setAutoDefault(false);
+    auto* storageReset = new QPushButton(QStringLiteral("恢复默认"));
+    storageReset->setObjectName(QStringLiteral("VisnipSettingsOfflineStorageReset"));
+    storageReset->setAutoDefault(false);
+    storageRow->addWidget(storageTitle);
+    storageRow->addWidget(storagePath,1);
+    storageRow->addWidget(storageChoose);
+    storageRow->addWidget(storageReset);
+    offlineLayout->addLayout(storageRow);
     auto* offlineStatus = hint(QString());
     offlineStatus->setObjectName(QStringLiteral("VisnipSettingsOfflineStatus"));
     offlineStatus->setWordWrap(true);
@@ -1492,6 +1514,13 @@ QWidget* SettingsDialog::createTranslationPage()
     const auto offlineRootDirectory = [this]() {
         return config_->settings().aiTranslate.offlineResourceDirectory;
     };
+    const auto describeStorage = [this, storagePath, storageReset]() {
+        const QString native = QDir::toNativeSeparators(
+            OfflineResourceService::storageDirectory(config_->settings().aiTranslate.offlineStorageDirectory));
+        storagePath->setText(native); storagePath->setCursorPosition(0); storagePath->setToolTip(native);
+        storageReset->setEnabled(!config_->settings().aiTranslate.offlineStorageDirectory.isEmpty());
+    };
+    describeStorage();
     const auto describeOfflineFiles = [offlineRootDirectory]() {
         const QString root = offlineRootDirectory();
         QString html;
@@ -1535,12 +1564,14 @@ QWidget* SettingsDialog::createTranslationPage()
                         : QStringLiteral("轻量离线资源尚未就绪。点击“下载并启用”，客户端将从官方渠道下载约 1.1 GiB 并逐个核对 SHA-256。"))
                     : QStringLiteral("精细离线资源不完整，而且没有官方发布渠道可以重新下载。请改用“轻量”，或继续使用已安装好的精细资源。")));
     };
-    const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,openOfflineFiles,deleteOffline,methodGroup,
-                               offlineQuality,selectedQuality,offlineRootDirectory](bool busy) {
+    const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,openOfflineFiles,deleteOffline,storageChoose,
+                               storageReset,methodGroup,offlineQuality,selectedQuality,offlineRootDirectory](bool busy) {
         downloadOffline->setEnabled(!busy); cancelOffline->setEnabled(busy);
         testOffline->setEnabled(!busy && OfflineTranslationService::resourceProblem(offlineRootDirectory(),selectedQuality()).isEmpty());
         openOfflineFiles->setEnabled(!busy);
         deleteOffline->setEnabled(!busy);
+        storageChoose->setEnabled(!busy);
+        storageReset->setEnabled(!busy && !config_->settings().aiTranslate.offlineStorageDirectory.isEmpty());
         offlineQuality->setEnabled(!busy);
         for (auto* button : methodGroup->buttons()) button->setEnabled(!busy);
         if (auto* reset=findChild<QPushButton*>(QStringLiteral("SettingsResetButton"))) reset->setEnabled(!busy);
@@ -1566,13 +1597,13 @@ QWidget* SettingsDialog::createTranslationPage()
             [updateOfflineSummary,refreshOffline,busyControls,resources]() {
         updateOfflineSummary(); refreshOffline(); busyControls(resources->isBusy());
     });
-    connect(downloadOffline, &QPushButton::clicked, page, [resources,offlineRootDirectory,selectedQuality,startSelfTest]() {
+    connect(downloadOffline, &QPushButton::clicked, page, [this,resources,offlineRootDirectory,selectedQuality,startSelfTest]() {
         // Installed resources need no download: test and enable.
         if (OfflineTranslationService::resourceProblem(offlineRootDirectory(), selectedQuality()).isEmpty()) {
             startSelfTest();
             return;
         }
-        resources->prepare(selectedQuality());
+        resources->prepare(selectedQuality(), config_->settings().aiTranslate.offlineStorageDirectory);
     });
     connect(cancelOffline, &QPushButton::clicked, page, [resources,localTest,liteTest]() {
         resources->cancel(); localTest->cancel(); liteTest->cancel();
@@ -1635,6 +1666,24 @@ QWidget* SettingsDialog::createTranslationPage()
     });
     connect(resources, &OfflineResourceService::failed, page, [resourceProgress,phaseLabel](const QString&) {resourceProgress->hide();phaseLabel->clear();});
     connect(resources, &OfflineResourceService::cancelled, page, [resourceProgress,phaseLabel]() {resourceProgress->hide();phaseLabel->clear();});
+    connect(storageChoose, &QPushButton::clicked, page, [this,describeStorage,refreshOffline]() {
+        const QString start=OfflineResourceService::storageDirectory(config_->settings().aiTranslate.offlineStorageDirectory);
+        const QString chosen=QFileDialog::getExistingDirectory(this,QStringLiteral("选择离线资源的下载位置"),start);
+        if (chosen.isEmpty()) return;
+        if (!QFileInfo(chosen).isWritable()) {
+            QMessageBox::warning(this,QStringLiteral("无法使用该文件夹"),
+                QStringLiteral("请选择一个可写入的文件夹；离线资源需要约 1.2 GiB 空间。"));
+            return;
+        }
+        config_->mutableSettings().aiTranslate.offlineStorageDirectory=QDir::cleanPath(chosen);
+        scheduleSave(); flushPendingSave();
+        describeStorage(); refreshOffline();
+    });
+    connect(storageReset, &QPushButton::clicked, page, [this,describeStorage,refreshOffline]() {
+        config_->mutableSettings().aiTranslate.offlineStorageDirectory.clear();
+        scheduleSave(); flushPendingSave();
+        describeStorage(); refreshOffline();
+    });
     connect(openOfflineFiles, &QPushButton::clicked, page, [offlineRootDirectory]() {
         const QString root=offlineRootDirectory();
         if (!root.isEmpty() && QFileInfo(root).isDir()) QDesktopServices::openUrl(QUrl::fromLocalFile(root));
@@ -1648,8 +1697,11 @@ QWidget* SettingsDialog::createTranslationPage()
                 .arg(readableBytes(planned)),
             QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel);
         if (answer!=QMessageBox::Yes) return;
+        // A resident engine keeps llama-server.exe open, which blocks deletion.
+        OfflineTranslationService::releaseSharedEngine();
+        LocalTextTranslationService::releaseSharedEngine();
         QString error;
-        if (!OfflineResourceService::removeInstalled(root,&error)) {
+        if (!OfflineResourceService::removeInstalled(root,config_->settings().aiTranslate.offlineStorageDirectory,&error)) {
             offlineStatus->setText(QStringLiteral("删除未完成：%1").arg(error)); return;
         }
         if (config_->settings().aiTranslate.offlineResourceDirectory==root) {

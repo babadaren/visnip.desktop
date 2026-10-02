@@ -29,6 +29,9 @@ public:
     void prepare(const QString& quality);
     void installApproved();
     void cancel();
+    // Removes the installed lite files, the enable receipt and the downloaded
+    // archives. The caller owns the user-visible confirmation.
+    static bool removeInstalled(const QString& root, QString* error = nullptr);
 signals:
     void busyChanged(bool busy);
     void statusChanged(const QString& status);

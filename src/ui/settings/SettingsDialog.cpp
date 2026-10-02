@@ -233,6 +233,13 @@ void setSettingsRole(QAbstractButton* button, const QString& role)
     button->setCursor(Qt::PointingHandCursor);
 }
 
+QString readableBytes(qint64 bytes)
+{
+    return bytes >= (1LL << 30)
+        ? QStringLiteral("%1 GiB").arg(bytes / double(1LL << 30), 0, 'f', 2)
+        : QStringLiteral("%1 MiB").arg(bytes / double(1LL << 20), 0, 'f', 1);
+}
+
 QWidget* controlRow(const QString& title, const QString& description, QWidget* control)
 {
     auto* row = new QWidget;
@@ -1451,32 +1458,66 @@ QWidget* SettingsDialog::createTranslationPage()
     }
     offlineActions->addStretch();
     offlineLayout->addLayout(offlineActions);
-    auto* importToggle = new QToolButton;
-    importToggle->setText(QStringLiteral("导入已有离线资源"));
-    importToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    importToggle->setArrowType(Qt::RightArrow); importToggle->setCheckable(true);
-    offlineLayout->addWidget(importToggle, 0, Qt::AlignLeft);
-    auto* importPanel = new QWidget;
-    auto* importLayout = new QHBoxLayout(importPanel); importLayout->setContentsMargins(0,0,0,0);
-    auto* offlineRoot = new QLineEdit(settings.offlineResourceDirectory);
-    offlineRoot->setObjectName(QStringLiteral("VisnipSettingsOfflineDirectory"));
-    offlineRoot->setPlaceholderText(QStringLiteral("自动管理，无需手动设置"));
-    offlineRoot->setReadOnly(true); offlineRoot->setMinimumWidth(260);
-    offlineRoot->setCursorPosition(0); offlineRoot->setToolTip(settings.offlineResourceDirectory);
-    auto* importOffline = new QPushButton(QStringLiteral("选择文件夹"));
-    importOffline->setAutoDefault(false);
-    importLayout->addWidget(offlineRoot,1); importLayout->addWidget(importOffline);
-    offlineLayout->addWidget(importPanel); importPanel->hide();
-    connect(importToggle, &QToolButton::toggled, page, [importPanel,importToggle](bool shown) {
-        importPanel->setVisible(shown); importToggle->setArrowType(shown ? Qt::DownArrow : Qt::RightArrow);
-    });
+    // Each installed file and the address it came from, so the download stays
+    // auditable after the fact; deletion is offered right below it.
+    auto* offlineFiles = new QLabel;
+    offlineFiles->setObjectName(QStringLiteral("VisnipSettingsOfflineFiles"));
+    offlineFiles->setTextFormat(Qt::RichText);
+    offlineFiles->setWordWrap(true);
+    offlineFiles->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    offlineFiles->setOpenExternalLinks(true);
+    offlineFiles->setMinimumWidth(0);
+    offlineLayout->addWidget(offlineFiles);
+    auto* deleteOffline = new QPushButton(QStringLiteral("删除已下载资源"));
+    deleteOffline->setObjectName(QStringLiteral("VisnipSettingsOfflineDelete"));
+    deleteOffline->setAutoDefault(false);
+    setSettingsRole(deleteOffline, QStringLiteral("danger"));
+    offlineLayout->addWidget(deleteOffline, 0, Qt::AlignLeft);
+    deleteOffline->hide();
     auto* resources = offlineResources_;
     auto* localTest = new OfflineTranslationService(page);
     auto* liteTest = new LocalTextTranslationService(page);
-    const auto refreshOffline = [this, offlineRoot, offlineStatus, resources, testOffline, downloadOffline, selectedQuality]() {
+    // The directory is app-managed; there is no user-visible path to edit.
+    const auto offlineRootDirectory = [this]() {
+        return config_->settings().aiTranslate.offlineResourceDirectory;
+    };
+    const auto describeOfflineFiles = [offlineRootDirectory]() {
+        const QString root = offlineRootDirectory();
+        QString html;
+        for (const auto& file : OfflineResourceCatalog::liteFiles()) {
+            const bool installed = !root.isEmpty() && QFileInfo::exists(QDir(root).filePath(file.target));
+            html += QStringLiteral("<p style=\"margin:0 0 10px 0\"><b>%1</b> · %2 · %3<br/>")
+                .arg(file.label.toHtmlEscaped(), readableBytes(file.size),
+                     installed ? QStringLiteral("已下载") : QStringLiteral("未下载"));
+            for (int source = 0; source < file.sources.size(); ++source) {
+                const QString address = file.sources.at(source).toString().toHtmlEscaped();
+                html += QStringLiteral("%1：<a href=\"%2\">%2</a><br/>")
+                    .arg(source == 0 ? QStringLiteral("下载地址") : QStringLiteral("备用地址"), address);
+            }
+            html += QStringLiteral("安装位置：%1 · SHA-256 %2…</p>")
+                .arg(file.target.toHtmlEscaped(), QString::fromLatin1(file.sha256.left(16)));
+        }
+        return html;
+    };
+    const auto refreshOfflineFiles = [offlineFiles, deleteOffline, describeOfflineFiles, offlineRootDirectory,
+                                      selectedQuality]() {
+        offlineFiles->setVisible(selectedQuality() == QStringLiteral("lite"));
+        offlineFiles->setText(describeOfflineFiles());
+        const QString root = offlineRootDirectory();
+        bool installed = false;
+        if (!root.isEmpty()) {
+            for (const auto& file : OfflineResourceCatalog::liteFiles()) {
+                if (QFileInfo::exists(QDir(root).filePath(file.target))) { installed = true; break; }
+            }
+        }
+        deleteOffline->setVisible(installed);
+    };
+    const auto refreshOffline = [offlineRootDirectory, offlineStatus, resources, testOffline, downloadOffline,
+                                 selectedQuality, refreshOfflineFiles]() {
+        refreshOfflineFiles();
         if (resources->isBusy()) { offlineStatus->setText(resources->statusText()); return; }
         const bool lite = selectedQuality() == QStringLiteral("lite");
-        const QString problem = OfflineTranslationService::resourceProblem(offlineRoot->text(), selectedQuality());
+        const QString problem = OfflineTranslationService::resourceProblem(offlineRootDirectory(), selectedQuality());
         const bool ready = problem.isEmpty();
         testOffline->setEnabled(ready);
         downloadOffline->setText(ready ? QStringLiteral("检查并启用") : QStringLiteral("下载并启用"));
@@ -1485,40 +1526,41 @@ QWidget* SettingsDialog::createTranslationPage()
                     : QStringLiteral("完整资源已找到。检查并自检通过后自动启用精细离线翻译；已有下载会复用。"))
             : (lite ? (problem.contains(QStringLiteral("Visual C++")) ? problem
                         : QStringLiteral("轻量离线资源尚未就绪。点击“下载并启用”，客户端将从官方渠道下载约 1.1 GiB 并逐个核对 SHA-256。"))
-                    : QStringLiteral("精细离线资源不完整，且无法再自动下载。请选择“轻量”，或在“导入已有离线资源”中选择完整的精细资源文件夹。")));
-        offlineRoot->setToolTip(offlineRoot->text());
+                    : QStringLiteral("精细离线资源不完整，而且没有官方发布渠道可以重新下载。请改用“轻量”，或继续使用已安装好的精细资源。")));
     };
-    const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,importToggle,importOffline,methodGroup,offlineRoot,offlineQuality,selectedQuality](bool busy) {
+    const auto busyControls = [this,downloadOffline,cancelOffline,testOffline,deleteOffline,methodGroup,offlineQuality,
+                               selectedQuality,offlineRootDirectory](bool busy) {
         downloadOffline->setEnabled(!busy); cancelOffline->setEnabled(busy);
-        testOffline->setEnabled(!busy && OfflineTranslationService::resourceProblem(offlineRoot->text(),selectedQuality()).isEmpty());
-        importToggle->setEnabled(!busy); importOffline->setEnabled(!busy); offlineQuality->setEnabled(!busy);
+        testOffline->setEnabled(!busy && OfflineTranslationService::resourceProblem(offlineRootDirectory(),selectedQuality()).isEmpty());
+        deleteOffline->setEnabled(!busy);
+        offlineQuality->setEnabled(!busy);
         for (auto* button : methodGroup->buttons()) button->setEnabled(!busy);
         if (auto* reset=findChild<QPushButton*>(QStringLiteral("SettingsResetButton"))) reset->setEnabled(!busy);
     };
-    const auto startSelfTest = [offlineRoot,offlineStatus,phaseLabel,localTest,liteTest,busyControls,selectedQuality]() {
+    const auto startSelfTest = [offlineRootDirectory,offlineStatus,phaseLabel,localTest,liteTest,busyControls,selectedQuality]() {
         busyControls(true);
         phaseLabel->setText(QStringLiteral("自检"));
         if (selectedQuality() == QStringLiteral("lite")) {
-            liteTest->setProperty("testedDirectory",offlineRoot->text());
+            liteTest->setProperty("testedDirectory",offlineRootDirectory());
             offlineStatus->setText(QStringLiteral("正在本机验证轻量翻译，成功后启用，不上传任何内容…"));
             LocalTextTranslationService::releaseSharedEngine(); // the test must run the model, not the cache
-            liteTest->translate(LocalTextTranslationService::selfTestTexts(),QStringLiteral("zh-Hans"),offlineRoot->text());
+            liteTest->translate(LocalTextTranslationService::selfTestTexts(),QStringLiteral("zh-Hans"),offlineRootDirectory());
             return;
         }
-        localTest->setProperty("testedDirectory",offlineRoot->text());
+        localTest->setProperty("testedDirectory",offlineRootDirectory());
         QImage input(800,260,QImage::Format_RGB32);input.fill(Qt::white);
         QPainter painter(&input);QFont font(QStringLiteral("Arial"));font.setPixelSize(26);painter.setFont(font);painter.setPen(Qt::black);
         painter.drawText(40,65,QStringLiteral("Project settings"));painter.drawText(40,125,QStringLiteral("Keep 12 files in the local folder."));painter.drawText(40,190,QStringLiteral("Save changes"));painter.end();
         offlineStatus->setText(QStringLiteral("正在本机验证精细处理，成功后启用，不上传截图…"));
-        localTest->translate(input,QStringLiteral("zh-Hans"),offlineRoot->text(),QStringLiteral("precise"));
+        localTest->translate(input,QStringLiteral("zh-Hans"),offlineRootDirectory(),QStringLiteral("precise"));
     };
     connect(offlineQuality, qOverload<int>(&QComboBox::currentIndexChanged), page,
             [updateOfflineSummary,refreshOffline,busyControls,resources]() {
         updateOfflineSummary(); refreshOffline(); busyControls(resources->isBusy());
     });
-    connect(downloadOffline, &QPushButton::clicked, page, [resources,offlineRoot,selectedQuality,startSelfTest]() {
+    connect(downloadOffline, &QPushButton::clicked, page, [resources,offlineRootDirectory,selectedQuality,startSelfTest]() {
         // Installed resources need no download: test and enable.
-        if (OfflineTranslationService::resourceProblem(offlineRoot->text(), selectedQuality()).isEmpty()) {
+        if (OfflineTranslationService::resourceProblem(offlineRootDirectory(), selectedQuality()).isEmpty()) {
             startSelfTest();
             return;
         }
@@ -1557,7 +1599,7 @@ QWidget* SettingsDialog::createTranslationPage()
             QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel);
         if (answer==QMessageBox::Yes) resources->installApproved(); else resources->cancel();
     });
-    const auto activateOffline = [this,offlineRoot,offlineStatus,phaseLabel,resourceProgress,methodGroup,methodDetails,offlineQuality](const QString& root,const QString& quality,qint64 ms) {
+    const auto activateOffline = [this,offlineStatus,phaseLabel,resourceProgress,methodGroup,methodDetails,offlineQuality,refreshOfflineFiles](const QString& root,const QString& quality,qint64 ms) {
         const auto previous=config_->settings().aiTranslate;
         auto& current=config_->mutableSettings().aiTranslate;
         current.offlineResourceDirectory=root; current.offlineQuality=quality;
@@ -1565,7 +1607,7 @@ QWidget* SettingsDialog::createTranslationPage()
         if (current.targetLanguage!=QStringLiteral("en") && current.targetLanguage!=QStringLiteral("zh-Hans")) current.targetLanguage=QStringLiteral("zh-Hans");
         scheduleSave();
         if (!flushPendingSave()) { config_->mutableSettings().aiTranslate=previous; offlineStatus->setText(QStringLiteral("自检通过，但无法保存配置，未启用。")); return; }
-        offlineRoot->setText(root); offlineRoot->setCursorPosition(0); offlineRoot->setToolTip(root);
+        refreshOfflineFiles();
         {
             const QSignalBlocker blocker(offlineQuality);
             offlineQuality->setCurrentIndex(qMax(0, offlineQuality->findData(quality)));
@@ -1585,11 +1627,25 @@ QWidget* SettingsDialog::createTranslationPage()
     });
     connect(resources, &OfflineResourceService::failed, page, [resourceProgress,phaseLabel](const QString&) {resourceProgress->hide();phaseLabel->clear();});
     connect(resources, &OfflineResourceService::cancelled, page, [resourceProgress,phaseLabel]() {resourceProgress->hide();phaseLabel->clear();});
-    connect(importOffline, &QPushButton::clicked, page, [this,offlineRoot,refreshOffline,selectedQuality]() {
-        const QString root=QFileDialog::getExistingDirectory(this,selectedQuality()==QStringLiteral("lite")
-            ? QStringLiteral("选择离线资源（包含 llama 和 models 文件夹）")
-            : QStringLiteral("选择完整精细离线资源（包含 precise.json）"),offlineRoot->text());
-        if (!root.isEmpty()) {offlineRoot->setText(root);offlineRoot->setCursorPosition(0);refreshOffline();}
+    connect(deleteOffline, &QPushButton::clicked, page, [this,offlineRootDirectory,refreshOffline,offlineStatus]() {
+        const QString root=offlineRootDirectory();
+        qint64 planned=0;
+        for (const auto& file : OfflineResourceCatalog::liteFiles()) planned += file.size;
+        const auto answer=QMessageBox::question(this,QStringLiteral("删除已下载的离线资源"),
+            QStringLiteral("将删除已下载的 llama.cpp 运行文件、Hy-MT2 翻译模型和下载缓存（约 %1），删除后需要重新下载才能使用离线翻译；当前配置不会改为联网翻译。是否继续？")
+                .arg(readableBytes(planned)),
+            QMessageBox::Yes|QMessageBox::Cancel,QMessageBox::Cancel);
+        if (answer!=QMessageBox::Yes) return;
+        QString error;
+        if (!OfflineResourceService::removeInstalled(root,&error)) {
+            offlineStatus->setText(QStringLiteral("删除未完成：%1").arg(error)); return;
+        }
+        if (config_->settings().aiTranslate.offlineResourceDirectory==root) {
+            config_->mutableSettings().aiTranslate.offlineResourceDirectory.clear();
+            scheduleSave(); flushPendingSave();
+        }
+        refreshOffline();
+        offlineStatus->setText(QStringLiteral("已删除本机下载的离线资源；需要时可再次点击“下载并启用”。"));
     });
     connect(testOffline, &QPushButton::clicked, page, startSelfTest);
     connect(localTest,&OfflineTranslationService::succeeded,page,[localTest,busyControls,activateOffline,offlineStatus](const ImageTranslationResult& result,qint64 ms){

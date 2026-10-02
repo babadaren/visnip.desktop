@@ -21,6 +21,7 @@
 #include <QTimer>
 #include <QProgressBar>
 #include <QLabel>
+#include <QLineEdit>
 #include <QToolButton>
 #include <QPainter>
 #include <QStandardPaths>
@@ -407,6 +408,67 @@ private slots:
         QVERIFY(!bar->isVisible());QCOMPARE(bar->maximum(),1000);
         emit manager->phaseChanged(QStringLiteral("install"));QVERIFY(!bar->isVisible());
         emit manager->phaseChanged(QStringLiteral("selftest"));QVERIFY(!bar->isVisible());
+        qunsetenv("VISNIP_TEST_SETTINGS_FILE");
+    }
+    void installedFilesAreListedWithTheirSourcesAndCanBeDeleted()
+    {
+        QTemporaryDir temp; QVERIFY(temp.isValid());
+        QTemporaryDir settings; QVERIFY(settings.isValid());
+        const QByteArray previous = qgetenv("LOCALAPPDATA");
+        struct Restore { QByteArray value; ~Restore() { if (value.isNull()) qunsetenv("LOCALAPPDATA"); else qputenv("LOCALAPPDATA", value); } } restore{previous};
+        qputenv("LOCALAPPDATA", QFile::encodeName(temp.path()));
+        qputenv("VISNIP_TEST_SETTINGS_FILE", QFile::encodeName(settings.filePath(QStringLiteral("settings.ini"))));
+        const QString root = temp.filePath(QStringLiteral("Vislate/offline/managed/lite-fixture"));
+        QVERIFY(QDir().mkpath(QDir(root).filePath(QStringLiteral("llama"))));
+        QVERIFY(QDir().mkpath(QDir(root).filePath(QStringLiteral("models"))));
+        for (const QString& name : {QStringLiteral("llama/llama-server.exe"),
+                                    QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf"),
+                                    QStringLiteral("vislate-managed.json")}) {
+            QFile file(QDir(root).filePath(name)); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("x"); file.close();
+        }
+        const QString cache = OfflineResourceService::cacheDirectory();
+        QVERIFY(QDir().mkpath(cache));
+        QFile cached(QDir(cache).filePath(QStringLiteral("download.zip"))); QVERIFY(cached.open(QIODevice::WriteOnly)); cached.close();
+
+        AppConfig config;
+        config.mutableSettings().aiTranslate.offlineResourceDirectory = root;
+        config.mutableSettings().aiTranslate.offlineQuality = QStringLiteral("lite");
+        SettingsDialog dialog(&config);
+        dialog.resize(840,620);
+        dialog.showPage(SettingsDialog::Page::Translation);
+        dialog.show(); QTest::qWait(50);
+
+        // The page lists every installed file with the publisher address it came from.
+        auto* files = dialog.findChild<QLabel*>(QStringLiteral("VisnipSettingsOfflineFiles")); QVERIFY(files);
+        QVERIFY(files->text().contains(QStringLiteral("github.com")));
+        QVERIFY(files->text().contains(QStringLiteral("modelscope.cn")));
+        QVERIFY(files->text().contains(QStringLiteral("huggingface.co")));
+        QVERIFY(files->text().contains(QStringLiteral("已下载")));
+        QVERIFY(!dialog.findChild<QLineEdit*>(QStringLiteral("VisnipSettingsOfflineDirectory")));
+        auto* remove = dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineDelete")); QVERIFY(remove);
+        QVERIFY(remove->isVisibleTo(&dialog));
+        const auto qaImage = qEnvironmentVariable("VISNIP_SETTINGS_QA_DELETE_IMAGE");
+        if (!qaImage.isEmpty()) QVERIFY(dialog.grab().save(qaImage));
+
+        QTimer answer; answer.setInterval(25);
+        connect(&answer, &QTimer::timeout, &dialog, []() {
+            for (auto* widget : QApplication::topLevelWidgets()) {
+                auto* message = qobject_cast<QMessageBox*>(widget);
+                if (message && message->isVisible() && message->standardButtons().testFlag(QMessageBox::Yes)) {
+                    if (auto* yes = message->button(QMessageBox::Yes)) yes->click();
+                }
+            }
+        });
+        answer.start();
+        remove->click();
+        QTest::qWait(50);
+
+        QVERIFY(!QFileInfo::exists(QDir(root).filePath(QStringLiteral("llama"))));
+        QVERIFY(!QFileInfo::exists(QDir(root).filePath(QStringLiteral("models/Hy-MT2-1.8B-Q4_K_M.gguf"))));
+        QVERIFY(!QFileInfo::exists(QDir(root).filePath(QStringLiteral("vislate-managed.json"))));
+        QVERIFY(!QFileInfo::exists(QDir(cache).filePath(QStringLiteral("download.zip"))));
+        QVERIFY(config.settings().aiTranslate.offlineResourceDirectory.isEmpty());
+        QVERIFY(!remove->isVisibleTo(&dialog));
         qunsetenv("VISNIP_TEST_SETTINGS_FILE");
     }
     void rateLimitPageNeverBecomesPackageBytes() {

@@ -127,6 +127,37 @@ QString OfflineResourceService::cacheDirectory()
 {
     return QDir::cleanPath(QDir(OfflineTranslationService::defaultResourceDirectory()).absoluteFilePath(QStringLiteral("../downloads")));
 }
+bool OfflineResourceService::removeInstalled(const QString& root, QString* error)
+{
+    const auto reject = [error](const QString& message) {
+        if (error) *error = message;
+        return false;
+    };
+    const QString directory = QDir::cleanPath(root);
+    if (directory.isEmpty()) return reject(QStringLiteral("没有已下载的离线资源。"));
+    for (const auto& file : OfflineResourceCatalog::liteFiles()) {
+        const QString path = QDir(directory).filePath(file.target);
+        const QFileInfo info(path);
+        if (!info.exists() && !info.isSymLink()) continue;
+        const bool removed = info.isDir() ? QDir(path).removeRecursively() : QFile::remove(path);
+        if (!removed) return reject(QStringLiteral("无法删除 %1，文件可能正在使用。").arg(file.target));
+    }
+    QFile::remove(QDir(directory).filePath(kReceipt));
+    QDir(directory).rmdir(QStringLiteral("models")); // only succeeds when empty
+    QDir().rmdir(directory);
+    // The archives are only useful for reinstalling the exact same files.
+    QDir cache(cacheDirectory());
+    if (cache.exists()) {
+        const auto entries = cache.entryInfoList(QDir::Files | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot);
+        for (const auto& entry : entries) {
+            if (entry.fileName() != QStringLiteral("install.lock")) {
+                QFile::remove(entry.absoluteFilePath());
+            }
+        }
+    }
+    if (error) error->clear();
+    return true;
+}
 void OfflineResourceService::status(const QString& text) { status_ = text; emit statusChanged(text); }
 void OfflineResourceService::reject(const QString& message) { status(message); emit failed(message); }
 void OfflineResourceService::releaseReply()

@@ -242,7 +242,11 @@ private slots:
         QVERIFY(!test->isEnabled());
         QVERIFY(status->text().contains(QStringLiteral("尚未就绪")));
         QVERIFY(status->text().contains(QStringLiteral("下载并启用")));
-        QVERIFY(dialog.findChild<QLineEdit*>(QStringLiteral("VisnipSettingsOfflineDirectory")));
+        // Resources are app-managed: no import field, but the file list and its
+        // delete action exist for every installed download.
+        QVERIFY(!dialog.findChild<QLineEdit*>(QStringLiteral("VisnipSettingsOfflineDirectory")));
+        QVERIFY(dialog.findChild<QLabel*>(QStringLiteral("VisnipSettingsOfflineFiles")));
+        QVERIFY(dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineDelete")));
         QVERIFY(dialog.findChild<QPushButton*>(QStringLiteral("VisnipSettingsOfflineSelfTest")));
         cloud->click();
         QCOMPARE(url->text(), QStringLiteral("https://cloud.example/base"));

@@ -78,6 +78,10 @@ scripts\test-debug.cmd
 
 欢迎提交问题和改进，开始前请先读 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请按 [SECURITY.md](SECURITY.md) 私下报告。
 
+## 社区
+
+本开源项目已链接并认可 [LINUX DO 社区](https://linux.do/)。
+
 ## 许可证
 
 本项目以 [Apache License 2.0](LICENSE) 授权，版权声明见 [NOTICE](NOTICE)。第三方组件、模型和数据的来源与许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

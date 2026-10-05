@@ -2,7 +2,7 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
-## Unreleased
+## 0.4.6
 
 - 首选项 → 关于 → 更新 no longer shows the release notes. A "查看更新内容" button opens the version's page on GitHub instead.
 - The update download progress bar is as tall as the offline download bar (22 px), so its byte counter is no longer cut off.

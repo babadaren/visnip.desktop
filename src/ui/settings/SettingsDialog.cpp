@@ -418,13 +418,6 @@ QString settingsStyleSheet()
         }
         QLabel#VisnipSettingsUpdateStatus { color: #182230; font-size: 13px; font-weight: 500; }
         QLabel#VisnipSettingsUpdateProblem { color: #B54708; font-size: 11px; }
-        QFrame#VisnipSettingsUpdateCard {
-            background: #F7F8FA;
-            border: 1px solid #E9EDF3;
-            border-radius: 8px;
-        }
-        QLabel#VisnipSettingsUpdateNotesTitle { color: #344054; font-size: 11px; font-weight: 650; }
-        QLabel#VisnipSettingsUpdateNotes { color: #475467; font-size: 12px; }
         QWidget#SettingsRow { background: transparent; min-height: 52px; }
         QFrame#SettingsDivider {
             color: #E9EDF3;
@@ -581,13 +574,15 @@ QString settingsStyleSheet()
         /* The resource download paints its byte counter inside the bar, so it must
            not inherit the 6 px height of the compact indicators above. The fill is
            kept light because Qt draws that text in one colour across the whole bar. */
-        QProgressBar#VisnipSettingsOfflineProgress {
+        QProgressBar#VisnipSettingsOfflineProgress,
+        QProgressBar#VisnipSettingsUpdateProgress {
             min-height: 22px;
             max-height: 22px;
             border-radius: 6px;
             font-size: 12px;
         }
-        QProgressBar#VisnipSettingsOfflineProgress::chunk {
+        QProgressBar#VisnipSettingsOfflineProgress::chunk,
+        QProgressBar#VisnipSettingsUpdateProgress::chunk {
             background: #C3D6F9;
             border-radius: 6px;
         }
@@ -2473,22 +2468,6 @@ QWidget* SettingsDialog::createAboutPage()
     updateProblem->setObjectName(QStringLiteral("VisnipSettingsUpdateProblem"));
     updateProblem->setWordWrap(true);
     layout->addWidget(updateProblem);
-    auto* updateCard = new QFrame;
-    updateCard->setObjectName(QStringLiteral("VisnipSettingsUpdateCard"));
-    auto* cardLayout = new QVBoxLayout(updateCard);
-    cardLayout->setContentsMargins(14, 10, 14, 12);
-    cardLayout->setSpacing(4);
-    auto* notesTitle = new QLabel(QStringLiteral("更新内容"));
-    notesTitle->setObjectName(QStringLiteral("VisnipSettingsUpdateNotesTitle"));
-    cardLayout->addWidget(notesTitle);
-    auto* updateNotes = new QLabel;
-    updateNotes->setObjectName(QStringLiteral("VisnipSettingsUpdateNotes"));
-    updateNotes->setWordWrap(true);
-    updateNotes->setTextFormat(Qt::PlainText);
-    updateNotes->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    cardLayout->addWidget(updateNotes);
-    layout->addSpacing(4);
-    layout->addWidget(updateCard);
     auto* updateProgress = new QProgressBar;
     updateProgress->setObjectName(QStringLiteral("VisnipSettingsUpdateProgress"));
     updateProgress->setRange(0, 1000);
@@ -2504,16 +2483,15 @@ QWidget* SettingsDialog::createAboutPage()
     setSettingsRole(installUpdate, QStringLiteral("primary"));
     auto* cancelUpdate = new QPushButton(QStringLiteral("暂停"));
     cancelUpdate->setObjectName(QStringLiteral("VisnipSettingsCancelUpdate"));
-    for (auto* button : {installUpdate, cancelUpdate, checkUpdate}) {
+    // The release notes stay on GitHub; the preferences only link to them.
+    auto* releaseNotes = new QPushButton(QStringLiteral("查看更新内容"));
+    releaseNotes->setObjectName(QStringLiteral("VisnipSettingsUpdateNotesButton"));
+    releaseNotes->setToolTip(QStringLiteral("在浏览器中打开这个版本在 GitHub 上的发布说明"));
+    for (auto* button : {installUpdate, cancelUpdate, releaseNotes, checkUpdate}) {
         button->setAutoDefault(false);
         updateActions->addWidget(button);
     }
     updateActions->addStretch();
-    auto* releaseLink = new QLabel;
-    releaseLink->setObjectName(QStringLiteral("VisnipSettingsUpdateLink"));
-    releaseLink->setOpenExternalLinks(true);
-    releaseLink->setTextFormat(Qt::RichText);
-    updateActions->addWidget(releaseLink);
     layout->addSpacing(4);
     layout->addLayout(updateActions);
     layout->addSpacing(8);
@@ -2529,8 +2507,8 @@ QWidget* SettingsDialog::createAboutPage()
                   QStringLiteral("打开首选项时向 GitHub 查询新版本，只是一次普通的网页请求，不上传任何数据"),
                   autoCheck, false);
 
-    const auto refreshUpdate = [this, updateStatus, updateProblem, updateCard, updateNotes, updateProgress,
-                                checkUpdate, installUpdate, cancelUpdate, releaseLink]() {
+    const auto refreshUpdate = [this, updateStatus, updateProblem, updateProgress,
+                                checkUpdate, installUpdate, cancelUpdate, releaseNotes]() {
         const auto state = updates_->state();
         const auto& release = updates_->release();
         const bool busy = updates_->busyInstalling();
@@ -2542,23 +2520,6 @@ QWidget* SettingsDialog::createAboutPage()
         const QString problem = offered ? UpdateService::installProblem() : QString();
         updateProblem->setText(problem);
         updateProblem->setVisible(!problem.isEmpty());
-        QString notes;
-        if (offered) {
-            // Release notes are Markdown; headings and emphasis are shown as plain text.
-            for (QString line : release.notes.split(QLatin1Char('\n'))) {
-                line = line.trimmed();
-                while (line.startsWith(QLatin1Char('#'))) line.remove(0, 1);
-                line = line.replace(QStringLiteral("**"), QString()).trimmed();
-                if (line.startsWith(QStringLiteral("- "))) line = QStringLiteral("· ") + line.mid(2);
-                // The heading that only repeats the version adds nothing.
-                if (line.isEmpty() || line == release.version.toString() || line == QStringLiteral("Visnip ") + release.version.toString()) continue;
-                notes += line + QLatin1Char('\n');
-            }
-            notes = notes.trimmed();
-            if (notes.size() > 700) notes = notes.left(700) + QStringLiteral("…");
-        }
-        updateNotes->setText(notes);
-        updateCard->setVisible(!notes.isEmpty());
         updateProgress->setVisible(state == UpdateService::State::Downloading);
         installUpdate->setText(busy ? QStringLiteral("正在更新…")
             : QStringLiteral("立即更新到 %1").arg(release.version.toString()));
@@ -2567,11 +2528,7 @@ QWidget* SettingsDialog::createAboutPage()
         cancelUpdate->setVisible(state == UpdateService::State::Downloading);
         checkUpdate->setEnabled(!busy && state != UpdateService::State::Checking
                                 && state != UpdateService::State::Restarting);
-        const QUrl page = release.page.isValid() ? release.page : AppUpdate::releasesPage();
-        releaseLink->setText(page.isValid()
-            ? QStringLiteral("<a href=\"%1\">%2</a>").arg(page.toString(QUrl::FullyEncoded).toHtmlEscaped(),
-                  offered ? QStringLiteral("在 GitHub 查看") : QStringLiteral("所有版本"))
-            : QString());
+        releaseNotes->setVisible(offered && release.page.isValid());
     };
     connect(updates_, &UpdateService::stateChanged, page, refreshUpdate);
     connect(updates_, &UpdateService::progress, page, [updateProgress](qint64 received, qint64 total) {
@@ -2595,6 +2552,9 @@ QWidget* SettingsDialog::createAboutPage()
         if (answer == QMessageBox::Yes) updates_->install();
     });
     connect(cancelUpdate, &QPushButton::clicked, page, [this]() { updates_->cancel(); });
+    connect(releaseNotes, &QPushButton::clicked, page, [this]() {
+        QDesktopServices::openUrl(updates_->release().page);
+    });
     refreshUpdate();
     layout->addStretch();
     return page;

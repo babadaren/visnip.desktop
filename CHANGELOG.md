@@ -2,7 +2,7 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
-## Unreleased
+## 0.4.5
 
 ### Question panel: copy only the answer
 

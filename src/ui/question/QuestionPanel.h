@@ -84,6 +84,11 @@ private:
     void refreshStatus();
     void refreshControls();
     void renderAnswer(bool resetScroll);
+    // The copy button copies only the final answer when the response has one,
+    // otherwise everything; the analysis is copied by selecting it.
+    void refreshCopyButton();
+    void copyText(const QString& text, const QString& done);
+    void showAnswerMenu(const QPoint& position);
     void setCollapsed(bool collapsed);
     bool isRunning() const;
 
@@ -126,6 +131,7 @@ private:
     QSizeGrip* rightGrip_ = nullptr;
     QTimer* renderTimer_ = nullptr;
     QTimer* tickTimer_ = nullptr;
+    QTimer* copiedTimer_ = nullptr;
 };
 
 } // namespace Visnip

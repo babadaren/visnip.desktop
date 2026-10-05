@@ -2,6 +2,15 @@
 
 Visnip was called Vislate before 0.4.0. Earlier versions were developed privately; the public history starts with the first open-source release.
 
+## Unreleased
+
+### Question panel: copy only the answer
+
+- "复制答案" copies just the final answer: the part after the response's last "答案：" line (also "最终答案", "Answer:"), without the reasoning, Markdown marks or LaTeX. For several questions it copies the numbered list of answers.
+- The default prompt asks for that answer block explicitly: one "答案：" line for a single question, or "答案：" followed by one line per question, and nothing after it.
+- When a response has no answer line (for example with a custom prompt), the button reads "复制全部" and copies everything, so its label always matches what it copies.
+- The analysis can be copied by selecting it: Ctrl+C, or a Chinese right-click menu with "复制所选内容", "复制答案", "复制全部" and "全选" (Qt's own menu was English). The button briefly shows "已复制答案" / "已复制全部".
+
 ## 0.4.4
 
 - The translate button in the toolbar has a new icon ("文 A"), drawn in the same line style as the other toolbar icons.

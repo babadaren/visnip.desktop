@@ -12,6 +12,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPushButton>
@@ -347,7 +348,9 @@ void QuestionPanel::buildUi()
     answer_->setObjectName(QStringLiteral("QuestionPanelAnswer"));
     answer_->setOpenLinks(false);
     answer_->setOpenExternalLinks(false);
-    answer_->setPlaceholderText(QStringLiteral("答案会显示在这里。"));
+    answer_->setPlaceholderText(QStringLiteral("答案会显示在这里。可以选中任意文字复制。"));
+    // Qt's own menu would be English (no Qt translations are shipped).
+    answer_->setContextMenuPolicy(Qt::CustomContextMenu);
     bodyLayout->addWidget(answer_, 1);
 
     auto* footer = new QHBoxLayout;
@@ -366,6 +369,10 @@ void QuestionPanel::buildUi()
     copyButton_->setObjectName(QStringLiteral("QuestionPanelCopyButton"));
     copyButton_->setCursor(Qt::PointingHandCursor);
     copyButton_->setAutoDefault(false);
+    copiedTimer_ = new QTimer(this);
+    copiedTimer_->setSingleShot(true);
+    copiedTimer_->setInterval(1500);
+    connect(copiedTimer_, &QTimer::timeout, this, &QuestionPanel::refreshCopyButton);
     footer->addWidget(previousButton_);
     footer->addWidget(position_);
     footer->addWidget(nextButton_);
@@ -391,10 +398,57 @@ void QuestionPanel::buildUi()
     });
     connect(nextButton_, &QToolButton::clicked, this, [this]() { showEntry(current_ + 1); });
     connect(copyButton_, &QPushButton::clicked, this, [this]() {
-        if (current_ >= 0 && !entries_[current_].answer.isEmpty()) {
-            QGuiApplication::clipboard()->setText(Question::unicodeMath(entries_[current_].answer));
-        }
+        if (current_ < 0 || entries_[current_].answer.isEmpty()) return;
+        const QString answer = Question::finalAnswer(entries_[current_].answer);
+        if (!answer.isEmpty()) copyText(answer, QStringLiteral("已复制答案"));
+        else copyText(answer_->toPlainText().trimmed(), QStringLiteral("已复制全部"));
     });
+    connect(answer_, &QWidget::customContextMenuRequested, this, &QuestionPanel::showAnswerMenu);
+}
+
+void QuestionPanel::refreshCopyButton()
+{
+    if (copiedTimer_->isActive()) return; // keep "已复制" for a moment
+    const bool has = current_ >= 0 && !entries_[current_].answer.isEmpty();
+    const bool answerOnly = has && !Question::finalAnswer(entries_[current_].answer).isEmpty();
+    copyButton_->setEnabled(has);
+    copyButton_->setText(answerOnly || !has ? QStringLiteral("复制答案") : QStringLiteral("复制全部"));
+    copyButton_->setToolTip(answerOnly
+        ? QStringLiteral("只复制最后的“答案”部分。需要解析时，在上方选中文字后按 Ctrl+C 或右键复制。")
+        : QStringLiteral("回答里没有单独的“答案：”一行，将复制全部内容；也可以在上方选中需要的文字复制。"));
+}
+
+void QuestionPanel::copyText(const QString& text, const QString& done)
+{
+    if (text.isEmpty()) return;
+    QGuiApplication::clipboard()->setText(text);
+    copyButton_->setText(done);
+    copiedTimer_->start();
+}
+
+void QuestionPanel::showAnswerMenu(const QPoint& position)
+{
+    const bool has = current_ >= 0 && !entries_[current_].answer.isEmpty();
+    const QString answer = has ? Question::finalAnswer(entries_[current_].answer) : QString();
+    QMenu menu(answer_);
+    QAction* selection = menu.addAction(QStringLiteral("复制所选内容"));
+    selection->setShortcut(QKeySequence::Copy);
+    selection->setEnabled(answer_->textCursor().hasSelection());
+    connect(selection, &QAction::triggered, answer_, &QTextBrowser::copy);
+    QAction* answerAction = menu.addAction(QStringLiteral("复制答案"));
+    answerAction->setEnabled(!answer.isEmpty());
+    connect(answerAction, &QAction::triggered, this, [this, answer]() { copyText(answer, QStringLiteral("已复制答案")); });
+    QAction* everything = menu.addAction(QStringLiteral("复制全部"));
+    everything->setEnabled(has);
+    connect(everything, &QAction::triggered, this, [this]() {
+        copyText(answer_->toPlainText().trimmed(), QStringLiteral("已复制全部"));
+    });
+    menu.addSeparator();
+    QAction* all = menu.addAction(QStringLiteral("全选"));
+    all->setShortcut(QKeySequence::SelectAll);
+    all->setEnabled(has);
+    connect(all, &QAction::triggered, answer_, &QTextBrowser::selectAll);
+    menu.exec(answer_->viewport()->mapToGlobal(position));
 }
 
 void QuestionPanel::setRegion(const QRect& globalRect, const QImage& preview)
@@ -642,7 +696,7 @@ void QuestionPanel::refreshControls()
     position_->setText(current_ >= 0 ? QStringLiteral("%1/%2").arg(current_ + 1).arg(count)
                                      : count > 0 ? QStringLiteral("新选区 · 共 %1 题").arg(count)
                                                  : QString());
-    copyButton_->setEnabled(current_ >= 0 && !entries_[current_].answer.isEmpty());
+    refreshCopyButton();
 }
 
 void QuestionPanel::renderAnswer(bool resetScroll)
@@ -659,9 +713,7 @@ void QuestionPanel::renderAnswer(bool resetScroll)
     } else {
         bar->setValue(previous);
     }
-    if (current_ >= 0) {
-        copyButton_->setEnabled(!entries_[current_].answer.isEmpty());
-    }
+    refreshCopyButton();
 }
 
 void QuestionPanel::setCollapsed(bool collapsed)

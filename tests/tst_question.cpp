@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QBuffer>
+#include <QClipboard>
 #include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -514,6 +515,36 @@ private slots:
         QCOMPARE(Question::unicodeMath(escaped), escaped);
     }
 
+    void finalAnswerIsOnlyTheAnswerPart_data()
+    {
+        QTest::addColumn<QString>("response");
+        QTest::addColumn<QString>("expected");
+        const QString steps = QStringLiteral("## 思路\n1. 先配方：x² + 2x + 1 = (x + 1)²\n2. 所以答案就是 -1\n\n");
+        QTest::newRow("single line") << steps + QStringLiteral("答案：x = -1") << QStringLiteral("x = -1");
+        QTest::newRow("bold label") << steps + QStringLiteral("**答案：** B. 北京") << QStringLiteral("B. 北京");
+        QTest::newRow("bold word") << steps + QStringLiteral("**答案**：C") << QStringLiteral("C");
+        QTest::newRow("numbered like the prompt") << steps + QStringLiteral("3. 答案：A") << QStringLiteral("A");
+        QTest::newRow("heading then list")
+            << steps + QStringLiteral("### 答案\n\n1. B\n2. x = 3") << QStringLiteral("1. B\n2. x = 3");
+        QTest::newRow("label then list with blank lines")
+            << steps + QStringLiteral("答案：\n1. B\n\n2. C\n\n3. D") << QStringLiteral("1. B\n2. C\n3. D");
+        QTest::newRow("note after a blank line is left out")
+            << steps + QStringLiteral("答案：C\n\n如果题目另有条件，结果可能不同。") << QStringLiteral("C");
+        QTest::newRow("last answer wins")
+            << QStringLiteral("初步答案：2\n检查后发现有误。\n\n最终答案：3") << QStringLiteral("3");
+        QTest::newRow("math becomes unicode") << steps + QStringLiteral("答案：$x^2$") << QStringLiteral("x²");
+        QTest::newRow("english") << QStringLiteral("Reasoning...\n\nFinal answer: 42") << QStringLiteral("42");
+        QTest::newRow("answer mentioned only in prose") << QStringLiteral("答案是 B，因为……") << QString();
+        QTest::newRow("analysis heading is not an answer") << QStringLiteral("答案解析：先求导") << QString();
+    }
+
+    void finalAnswerIsOnlyTheAnswerPart()
+    {
+        QFETCH(QString, response);
+        QFETCH(QString, expected);
+        QCOMPARE(Question::finalAnswer(response), expected);
+    }
+
     void encodeImageKeepsSizeReasonable()
     {
         QImage large(3000, 1500, QImage::Format_ARGB32);
@@ -748,7 +779,65 @@ private slots:
         QVERIFY(!answer->toPlainText().contains(QLatin1Char('$')));
         QVERIFY(ask->text().startsWith(QStringLiteral("获取答案")));
         QCOMPARE(child<QLabel>(panel, "QuestionPanelPosition")->text(), QStringLiteral("1/1"));
-        QVERIFY(child<QPushButton>(panel, "QuestionPanelCopyButton")->isEnabled());
+        auto* copy = child<QPushButton>(panel, "QuestionPanelCopyButton");
+        QVERIFY(copy->isEnabled());
+        QCOMPARE(copy->text(), QStringLiteral("复制答案"));
+        copy->click();
+        QCOMPARE(QGuiApplication::clipboard()->text(), QStringLiteral("x²"));
+        QCOMPARE(copy->text(), QStringLiteral("已复制答案"));
+    }
+
+    void panelCopiesOnlyTheAnswerAndLetsTheAnalysisBeSelected()
+    {
+        FakeModelServer server;
+        QVERIFY(server.listen());
+        server.chunks = {openAiChunk(QStringLiteral("## 思路\n两边同除以 2，得到 x = 3。\n\n答案：x = 3")),
+                         QByteArray("data: [DONE]\n\n")};
+        AppConfig config;
+        configureFor(config, server);
+        QuestionPanel panel(&config);
+        panel.setAttribute(Qt::WA_DeleteOnClose, false);
+        panel.setRegionGrabber([](const QRect&, QString*) { return testCapture(Qt::yellow); });
+        panel.setRegion(QRect(40, 60, 300, 120), testCapture(Qt::gray).scaled(300, 120));
+        panel.show();
+        child<QPushButton>(panel, "QuestionPanelAsk")->click();
+        auto* status = child<QLabel>(panel, "QuestionPanelStatus");
+        QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("已完成")), 10000);
+
+        auto* copy = child<QPushButton>(panel, "QuestionPanelCopyButton");
+        copy->click();
+        QCOMPARE(QGuiApplication::clipboard()->text(), QStringLiteral("x = 3"));
+
+        // The analysis is ordinary selectable text with a Chinese context menu.
+        auto* answer = child<QTextBrowser>(panel, "QuestionPanelAnswer");
+        QVERIFY(answer->textInteractionFlags().testFlag(Qt::TextSelectableByMouse));
+        QCOMPARE(answer->contextMenuPolicy(), Qt::CustomContextMenu);
+        QTextCursor cursor = answer->document()->find(QStringLiteral("两边同除以 2"));
+        QVERIFY(!cursor.isNull());
+        answer->setTextCursor(cursor);
+        answer->copy();
+        QCOMPARE(QGuiApplication::clipboard()->text(), QStringLiteral("两边同除以 2"));
+    }
+
+    void panelCopiesEverythingWhenThereIsNoAnswerLine()
+    {
+        FakeModelServer server;
+        QVERIFY(server.listen());
+        server.chunks = {openAiChunk(QStringLiteral("这道题缺少条件，无法确定。")), QByteArray("data: [DONE]\n\n")};
+        AppConfig config;
+        configureFor(config, server);
+        QuestionPanel panel(&config);
+        panel.setAttribute(Qt::WA_DeleteOnClose, false);
+        panel.setRegionGrabber([](const QRect&, QString*) { return testCapture(Qt::yellow); });
+        panel.setRegion(QRect(40, 60, 300, 120), testCapture(Qt::gray).scaled(300, 120));
+        panel.show();
+        child<QPushButton>(panel, "QuestionPanelAsk")->click();
+        auto* status = child<QLabel>(panel, "QuestionPanelStatus");
+        QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("已完成")), 10000);
+        auto* copy = child<QPushButton>(panel, "QuestionPanelCopyButton");
+        QCOMPARE(copy->text(), QStringLiteral("复制全部"));
+        copy->click();
+        QCOMPARE(QGuiApplication::clipboard()->text(), QStringLiteral("这道题缺少条件，无法确定。"));
     }
 
     void panelKeepsRecentQuestionsBrowsable()

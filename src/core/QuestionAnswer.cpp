@@ -762,7 +762,8 @@ QString defaultPrompt()
         "你是一名严谨的解题助手。用户会发送一张截图，截图中包含一道或多道题目。请：\n"
         "1. 准确识别截图中的题目，包括题干、选项以及图表中的关键信息。\n"
         "2. 简明地写出解题思路和关键步骤。\n"
-        "3. 最后单独一行写出「答案：……」。选择题写明正确选项的字母和内容；多道题按题号分别作答。\n"
+        "3. 最后写出答案部分，只写最终结果，不写推导：单题写成一行「答案：……」；多道题先单独一行写「答案：」，"
+        "再按题号逐行列出，例如「1. B」「2. x = 3」。选择题写明正确选项的字母和内容。答案部分之后不要再写其他内容。\n"
         "4. 如果题目不完整、看不清或有歧义，请指出，并在合理假设下作答。\n"
         "书写要求：使用简洁的 Markdown；不要使用 LaTeX，数学公式用 Unicode 符号和普通文字书写，"
         "例如 x² + 2x + 1 = 0、√2、a/b、≤、≥、π、∫。");
@@ -1219,6 +1220,48 @@ QString unicodeMath(const QString& markdown)
     }
     flushProse();
     return out;
+}
+
+QString finalAnswer(const QString& markdown)
+{
+    // "答案：B", "**答案**：B", "### 最终答案", "3. 答案：B", "> Answer: 42"
+    static const QRegularExpression label(QStringLiteral(
+        "^\\s*(?:#{1,6}\\s*|>\\s*|[-*+]\\s+)?[*_]{0,2}\\s*(?:\\d+[.、)]\\s*)?[*_]{0,2}\\s*"
+        "(?:最终答案|答案|final answer|answer)\\s*[*_]{0,2}\\s*(?:[:：]|$)"),
+        QRegularExpression::CaseInsensitiveOption);
+    // One item of a per-question list: "1. B", "(2) x = 3", "- C".
+    static const QRegularExpression item(QStringLiteral("^\\s*[*_]{0,2}(?:\\d+[.、)]|[(（]\\d+[)）]|[-*+]\\s)"));
+    const QStringList lines = unicodeMath(markdown).split(QLatin1Char('\n'));
+    int start = -1;
+    for (int index = 0; index < lines.size(); ++index) {
+        if (label.match(lines[index]).hasMatch()) start = index;
+    }
+    if (start < 0) return {};
+    QStringList answer;
+    const QString first = lines[start].mid(label.match(lines[start]).capturedEnd()).trimmed();
+    if (!first.isEmpty()) answer.append(first);
+    for (int index = start + 1; index < lines.size(); ++index) {
+        const QString line = lines[index].trimmed();
+        if (!line.isEmpty()) {
+            answer.append(line);
+            continue;
+        }
+        if (answer.isEmpty()) continue; // the answer may start below its label
+        // A blank line ends the answer, unless a per-question list goes on.
+        int next = index + 1;
+        while (next < lines.size() && lines[next].trimmed().isEmpty()) ++next;
+        if (next >= lines.size() || !item.match(answer.last()).hasMatch() || !item.match(lines[next]).hasMatch()) break;
+        index = next - 1;
+    }
+    static const QRegularExpression emphasis(QStringLiteral("(\\*\\*|__|`)"));
+    static const QRegularExpression quote(QStringLiteral("^>\\s*"));
+    for (QString& line : answer) {
+        line.remove(emphasis);
+        line.remove(quote);
+        line = line.trimmed();
+    }
+    answer.removeAll(QString());
+    return answer.join(QLatin1Char('\n'));
 }
 
 } // namespace Visnip::Question

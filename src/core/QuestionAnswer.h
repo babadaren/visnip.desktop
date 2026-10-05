@@ -119,4 +119,10 @@ QString describeHttpError(int status, const QByteArray& body);
 // LaTeX. Code spans and fenced code blocks are left untouched.
 QString unicodeMath(const QString& markdown);
 
+// The final answer of a response, as plain text: the part after its last
+// "答案：" (also "最终答案", "Answer:", "Final answer:") line, up to the next
+// blank line. Markdown emphasis is removed, numbered lines are kept and math
+// is rewritten as Unicode. Empty when the response has no such line.
+QString finalAnswer(const QString& markdown);
+
 } // namespace Visnip::Question

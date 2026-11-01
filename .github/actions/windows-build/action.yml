@@ -13,7 +13,7 @@ runs:
   using: composite
   steps:
     - name: Install Qt 6.4.2 and MinGW 11.2
-      uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+      uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
       with:
         version: '6.4.2'
         host: windows
